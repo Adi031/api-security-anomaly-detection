@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+aiosqlite
+websockets
+torch
+numpy
+scikit-learn
+pydantic
