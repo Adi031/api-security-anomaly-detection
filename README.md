@@ -81,6 +81,28 @@ This generates normal human browsing behavior. You will see the Active Sessions 
 
 ---
 
+
+---
+
+## How to Retrain the Model (Optional)
+
+If you have cleared the database or modified the simulator and need to retrain the LSTM model from scratch, follow these steps before starting the Scoring Engine:
+
+**1. Generate Normal Training Traffic:**
+`powershell
+cd traffic-simulator
+python simulator.py --users 30 --duration 600
+`
+*(Wait for this to complete and fill the database with baseline normal traffic).*
+
+**2. Extract Features & Train:**
+`powershell
+cd ml-pipeline
+python features/feature_builder.py
+python training/train_lstm_ae.py
+`
+This will rebuild the sequential vocabulary, train the PyTorch LSTM Autoencoder, automatically calculate the new anomaly threshold, and save the updated weights to ml-pipeline/saved_models/.
+
 ## Simulating Cyber Attacks
 
 To see the LSTM Autoencoder detect sequence anomalies, open a **5th Terminal** and launch any of the specialized attack scripts:
