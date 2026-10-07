@@ -110,28 +110,35 @@ To see the LSTM Autoencoder detect sequence anomalies, open a **5th Terminal** a
 **1. Credential Stuffing / Brute Force** (Rapid repetitive `/login` attempts):
 ```powershell
 cd traffic-simulator
-python -m profiles.attacks.brute_force
+python simulator.py --mode attack --attack credential_stuffing
 ```
 
 **2. BOLA / IDOR Enumeration** (Systematically guessing `user_id` or `order_id` endpoints):
 ```powershell
 cd traffic-simulator
-python -m profiles.attacks.bola
+python simulator.py --mode attack --attack enumeration
 ```
 
 **3. Web Scraping** (Aggressive traversal of all `/products` without natural dwell time):
 ```powershell
 cd traffic-simulator
-python -m profiles.attacks.scraping
+python simulator.py --mode attack --attack scraping
 ```
 
 **4. Data Exfiltration** (Downloading massive amounts of data):
 ```powershell
 cd traffic-simulator
-python -m profiles.attacks.data_exfiltration
+python simulator.py --mode attack --attack privilege_probe
 ```
 
 You will instantly see the Dashboard graph spike above the critical threshold, triggering `WARNING` and `BLOCKED` badges in real-time.
+
+**5. The Chaos Mode** (Run all attacks simultaneously):
+`powershell
+cd traffic-simulator
+python simulator.py --mode attack --attack all
+`
+
 
 ---
 
