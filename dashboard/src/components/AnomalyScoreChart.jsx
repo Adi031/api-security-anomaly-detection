@@ -2,7 +2,11 @@ import React from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { formatTimestamp } from '../utils/formatters';
 
-export const AnomalyScoreChart = ({ data }) => {
+export const AnomalyScoreChart = ({ data, threshold = 0.5 }) => {
+  const warningLine = threshold;
+  const criticalLine = threshold * 2;
+  const maxDomain = Math.max(criticalLine * 1.5, ...data.map(d => d.score), 1.0);
+
   return (
     <div className="card" style={{ flex: 1, minHeight: '300px' }}>
       <div className="card-header">Live Anomaly Scores</div>
@@ -27,18 +31,19 @@ export const AnomalyScoreChart = ({ data }) => {
               minTickGap={30}
             />
             <YAxis 
-              domain={[0, 100]} 
+              domain={[0, maxDomain]} 
               stroke="var(--color-text-secondary)" 
               tick={{ fontSize: 12 }} 
               tickCount={5}
+              tickFormatter={(val) => val.toFixed(2)}
             />
             <Tooltip 
               contentStyle={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '4px' }}
               labelFormatter={(label) => formatTimestamp(label)}
               itemStyle={{ color: 'var(--color-text-primary)' }}
             />
-            <ReferenceLine y={70} stroke="var(--color-warning)" strokeDasharray="3 3" />
-            <ReferenceLine y={90} stroke="var(--color-danger)" strokeDasharray="3 3" />
+            <ReferenceLine y={warningLine} stroke="var(--color-warning)" strokeDasharray="3 3" />
+            <ReferenceLine y={criticalLine} stroke="var(--color-danger)" strokeDasharray="3 3" />
             <Area 
               type="monotone" 
               dataKey="score" 

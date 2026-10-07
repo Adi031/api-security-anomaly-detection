@@ -93,13 +93,14 @@ function App() {
           <SystemStats stats={stats} />
           
           <div className="flex gap-4" style={{ height: '300px' }}>
-            <AnomalyScoreChart data={chartData} />
+            <AnomalyScoreChart data={chartData} threshold={stats.model_info?.threshold || 0.526} />
             <RequestTimeline requests={requests} />
           </div>
 
           <UserSessionTable 
             sessions={sessions} 
             onSessionClick={setSelectedSession} 
+            threshold={stats.model_info?.threshold || 0.526}
           />
         </section>
 

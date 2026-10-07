@@ -1,0 +1,22 @@
+
+=========================================
+Results for Dense Autoencoder
+=========================================
+Recall (Detection Rate): 60.43%
+Precision:               99.36%
+F1-Score:                75.15%
+ROC-AUC:                 0.9352
+False Positive Rate:     1.64% (Should be low!)
+True Negatives: 120 | False Positives: 2
+False Negatives: 203 | True Positives: 310
+
+=========================================
+Results for LSTM Autoencoder
+=========================================
+Recall (Detection Rate): 70.51%
+Precision:               99.40%
+F1-Score:                82.50%
+ROC-AUC:                 0.9526
+False Positive Rate:     1.64% (Should be low!)
+True Negatives: 60 | False Positives: 1
+False Negatives: 69 | True Positives: 165

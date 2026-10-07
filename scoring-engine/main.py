@@ -1,8 +1,7 @@
 import asyncio
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from typing import Dict, Set
 from fastapi.middleware.cors import CORSMiddleware
-from typing import List, Set, Dict
-from datetime import datetime
 import json
 import time
 
@@ -62,7 +61,8 @@ async def poll_database():
                 last_id = max(log['id'] for log in logs)
 
                 for sid, session_logs in sessions.items():
-                    features = extract_features(session_logs)
+                    full_session_logs = await db.fetch_session(sid)
+                    features = extract_features(full_session_logs)
                     score, severity, feature_contributions = scorer.score_features(features)
                     
                     stats["total_scored"] += len(session_logs)

@@ -16,15 +16,12 @@ Usage:
 """
 
 import os
-import sys
 import argparse
 import numpy as np
 import pandas as pd
 import sqlite3
 import pickle
 import re
-from collections import defaultdict
-from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
 
 # Endpoint vocabulary — maps endpoint patterns to IDs
@@ -348,3 +345,50 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+def build_sequence_features(df_group, vocab, max_len=30):
+    """Builds a single sequence tensor for inference from a DataFrame of logs."""
+    import numpy as np
+    
+    # Sort by timestamp
+    df_group = df_group.sort_values('timestamp')
+    
+    feature_dim = 10
+    call_features = []
+    
+    for i, (_, row) in enumerate(df_group.iterrows()):
+        endpoint = row.get('endpoint', '')
+        norm_ep = normalize_endpoint(endpoint)
+        ep_id = vocab.get(norm_ep, vocab.get('<UNK>', 0))
+        
+        method_vec = encode_method(row.get('method', 'GET'))
+        status = encode_status(row.get('status_code', 200))
+        
+        if i > 0:
+            prev_time = df_group.iloc[i-1]['timestamp']
+            curr_time = row['timestamp']
+            inter_time = (curr_time - prev_time).total_seconds()
+            inter_time = np.log1p(inter_time)
+        else:
+            inter_time = 0.0
+            
+        resp_time = row.get('response_time_ms', 0) or 0
+        resp_time = resp_time / 1000.0
+        
+        body_size = np.log1p(row.get('request_body_size', 0) or 0)
+        is_auth = float(row.get('is_authenticated', False))
+        
+        features = np.concatenate([
+            [ep_id], method_vec, [status], [inter_time], [resp_time], [body_size], [is_auth]
+        ])
+        call_features.append(features)
+        
+    call_features = np.array(call_features, dtype=np.float32)
+    
+    # Trim to max_len from the END (most recent requests)
+    if len(call_features) > max_len:
+        call_features = call_features[-max_len:]
+        
+    padded = np.zeros((max_len, feature_dim), dtype=np.float32)
+    padded[:len(call_features)] = call_features
+    return padded

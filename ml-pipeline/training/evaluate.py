@@ -17,7 +17,6 @@ import sys
 import argparse
 import numpy as np
 import torch
-import pickle
 import json
 import matplotlib
 matplotlib.use('Agg')
@@ -30,7 +29,6 @@ from sklearn.metrics import (
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from models.dense_autoencoder import DenseAutoencoder, DenseAutoencoderWithBatchNorm
-from models.lstm_autoencoder import LSTMAutoencoder, BidirectionalLSTMAutoencoder
 from models.threshold import ThresholdSelector
 
 

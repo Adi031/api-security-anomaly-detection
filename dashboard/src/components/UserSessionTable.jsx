@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { truncateId, formatScore, getSeverityColor } from '../utils/formatters';
 
-export const UserSessionTable = ({ sessions, onSessionClick }) => {
+export const UserSessionTable = ({ sessions, onSessionClick, threshold = 0.526 }) => {
+  const warningLine = threshold;
+  const criticalLine = threshold * 2;
   const [sortConfig, setSortConfig] = useState({ key: 'score', direction: 'desc' });
 
   const sortedSessions = [...sessions].sort((a, b) => {
@@ -43,7 +45,7 @@ export const UserSessionTable = ({ sessions, onSessionClick }) => {
           </thead>
           <tbody>
             {sortedSessions.map((session) => {
-              const isFlagged = session.score >= 70;
+              const isFlagged = session.score >= warningLine;
               return (
                 <tr 
                   key={session.session_id} 
@@ -55,14 +57,14 @@ export const UserSessionTable = ({ sessions, onSessionClick }) => {
                   <td>{session.ip || 'Unknown'}</td>
                   <td style={{ 
                     fontWeight: 600, 
-                    color: getSeverityColor(session.score >= 90 ? 'critical' : session.score >= 70 ? 'warning' : 'normal')
+                    color: getSeverityColor(session.score >= criticalLine ? 'critical' : session.score >= warningLine ? 'warning' : 'normal')
                   }}>
                     {formatScore(session.score)}
                   </td>
                   <td>{session.requests || 0}</td>
                   <td>
-                    <span className={`badge badge-${isFlagged ? (session.score >= 90 ? 'critical' : 'warning') : 'normal'}`}>
-                      {isFlagged ? (session.score >= 90 ? 'BLOCKED' : 'FLAGGED') : 'CLEAN'}
+                    <span className={`badge badge-${isFlagged ? (session.score >= criticalLine ? 'critical' : 'warning') : 'normal'}`}>
+                      {isFlagged ? (session.score >= criticalLine ? 'BLOCKED' : 'FLAGGED') : 'CLEAN'}
                     </span>
                   </td>
                 </tr>
