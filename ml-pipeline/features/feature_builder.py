@@ -10,6 +10,13 @@ Usage:
 """
 
 import os
+
+import random
+import numpy as np
+import torch
+random.seed(999)
+np.random.seed(999)
+torch.manual_seed(999)
 import sys
 import argparse
 import numpy as np
@@ -180,7 +187,7 @@ def split_and_save(features, metadata, output_dir, train_ratio=0.8, normal_only_
     if normal_only_train and label_col:
         # Separate normal and anomalous
         labels = np.array([m.get(label_col, 'normal') for m in metadata])
-        normal_mask = labels == 'normal'
+        normal_mask = np.isin(labels, ['normal', 'power'])
         attack_mask = ~normal_mask
         
         normal_features = features[normal_mask]
@@ -191,13 +198,16 @@ def split_and_save(features, metadata, output_dir, train_ratio=0.8, normal_only_
         n_train = int(n_normal * train_ratio)
         
         indices = np.random.permutation(n_normal)
-        train_features = normal_features[indices[:n_train]]
-        val_features = normal_features[indices[n_train:]]
+        n_val = int(n_normal * 0.15)
         
-        # Test set includes both normal val and all attacks
-        test_features = np.concatenate([val_features, attack_features])
+        train_features = normal_features[indices[:n_train]]
+        val_features = normal_features[indices[n_train:n_train+n_val]]
+        test_normal_features = normal_features[indices[n_train+n_val:]]
+        
+        # Test set includes separate normal test and all attacks
+        test_features = np.concatenate([test_normal_features, attack_features])
         test_labels = np.concatenate([
-            np.zeros(len(val_features)),  # 0 = normal
+            np.zeros(len(test_normal_features)),  # 0 = normal
             np.ones(len(attack_features))  # 1 = attack
         ])
     else:

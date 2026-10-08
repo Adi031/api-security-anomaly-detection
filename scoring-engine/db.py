@@ -21,7 +21,7 @@ class Database:
         query = """
             SELECT id, timestamp, user_id, session_id, ip_address, method, endpoint, 
                    status_code, response_time_ms, user_agent, request_body_size, 
-                   response_body_size, is_authenticated
+                   response_body_size, is_authenticated, traffic_type
             FROM request_logs
             WHERE id > ?
             ORDER BY id ASC
@@ -68,6 +68,12 @@ class Database:
             records = await cursor.fetchall()
         return [dict(r) for r in records]
         
+    async def fetch_recent_session(self, session_id: str, latest_ts: str, seconds: int = 60):
+        query = "SELECT * FROM request_logs WHERE session_id = ? AND timestamp >= datetime(?, ?) AND timestamp <= ? ORDER BY timestamp ASC"
+        async with self.conn.execute(query, (session_id, latest_ts, f"-{seconds} second", latest_ts)) as cursor:
+            records = await cursor.fetchall()
+        return [dict(r) for r in records]
+
     async def fetch_active_sessions(self):
         query = """
             SELECT session_id, count(*) as request_count 

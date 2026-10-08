@@ -16,6 +16,13 @@ Usage:
 """
 
 import os
+
+import random
+import numpy as np
+import torch
+random.seed(999)
+np.random.seed(999)
+torch.manual_seed(999)
 import argparse
 import numpy as np
 import pandas as pd
@@ -106,7 +113,7 @@ def build_sequences(df, seq_len=30, group_by='session_id'):
     
     # Build endpoint vocabulary on normal data only
     if 'traffic_type' in df.columns:
-        normal_endpoints = df[df['traffic_type'] == 'normal']['endpoint'].tolist()
+        normal_endpoints = df[df['traffic_type'].isin(['normal', 'power'])]['endpoint'].tolist()
     else:
         normal_endpoints = df['endpoint'].tolist()
     
@@ -230,7 +237,7 @@ def split_and_save(sequences, metadata, vocab, output_dir, train_ratio=0.8, norm
     
     if normal_only_train:
         # Separate normal and attack sessions
-        normal_mask = labels == 'normal'
+        normal_mask = np.isin(labels, ['normal', 'power'])
         attack_mask = ~normal_mask
         
         normal_group_ids = np.unique(all_group_ids[normal_mask])
@@ -239,26 +246,27 @@ def split_and_save(sequences, metadata, vocab, output_dir, train_ratio=0.8, norm
         # Shuffle and split normal sessions
         np.random.shuffle(normal_group_ids)
         n_normal_groups = len(normal_group_ids)
-        n_train_groups = int(n_normal_groups * train_ratio)
+        n_train_groups = int(n_normal_groups * 0.7)
+        n_val_groups = int(n_normal_groups * 0.15)
         
         train_groups = set(normal_group_ids[:n_train_groups])
-        val_groups = set(normal_group_ids[n_train_groups:])
-        
-        # Test groups include val normal and ALL attacks
-        # (Though we might want test to be separate, let's keep val for threshold tuning and use it + attacks for test)
-        # Actually, let's keep train, val, and test disjoint.
-        # So val is val_groups, and test is attack_groups + some normal groups?
-        # Let's just follow feature_builder logic: val is for tuning, test includes val normals + all attacks
+        val_groups = set(normal_group_ids[n_train_groups:n_train_groups+n_val_groups])
+        test_normal_groups = set(normal_group_ids[n_train_groups+n_val_groups:])
         
         train_idx = [i for i, gid in enumerate(all_group_ids) if gid in train_groups]
         val_idx = [i for i, gid in enumerate(all_group_ids) if gid in val_groups]
+        test_normal_idx = [i for i, gid in enumerate(all_group_ids) if gid in test_normal_groups]
         attack_idx = [i for i, gid in enumerate(all_group_ids) if gid in attack_group_ids]
         
         train_seq = sequences[train_idx]
         val_seq = sequences[val_idx]
         
-        test_seq = np.concatenate([sequences[val_idx], sequences[attack_idx]]) if attack_idx else sequences[val_idx]
-        test_labels = np.concatenate([np.zeros(len(val_idx)), np.ones(len(attack_idx))]) if attack_idx else np.zeros(len(val_idx))
+        if attack_idx:
+            test_seq = np.concatenate([sequences[test_normal_idx], sequences[attack_idx]])
+            test_labels = np.concatenate([np.zeros(len(test_normal_idx)), np.ones(len(attack_idx))])
+        else:
+            test_seq = sequences[test_normal_idx]
+            test_labels = np.zeros(len(test_normal_idx))
     else:
         # Simple session split without labels
         unique_groups = np.unique(all_group_ids)

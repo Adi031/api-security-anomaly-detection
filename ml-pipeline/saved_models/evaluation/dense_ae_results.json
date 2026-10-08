@@ -1,0 +1,17 @@
+{
+  "model_name": "dense_ae",
+  "threshold": 0.5940366387367249,
+  "threshold_method": "percentile-99.0",
+  "precision": 0.9951690821256038,
+  "recall": 0.9786223277909739,
+  "f1_score": 0.9868263473053892,
+  "auc_roc": 0.9983272556956944,
+  "auc_pr": 0.999717354498861,
+  "n_normal_test": 71,
+  "n_attack_test": 421,
+  "normal_error_mean": 0.11215533316135406,
+  "normal_error_std": 0.1391892433166504,
+  "attack_error_mean": 58.69803237915039,
+  "attack_error_std": 55.95616149902344,
+  "separation_ratio": 523.3637084960938
+}

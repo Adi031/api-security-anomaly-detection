@@ -1,0 +1,17 @@
+{
+  "model_name": "lstm_ae",
+  "threshold": 0.4593636691570282,
+  "threshold_method": "percentile-99.0",
+  "precision": 1.0,
+  "recall": 0.6949748743718593,
+  "f1_score": 0.8200415060776757,
+  "auc_roc": 0.9997347850362925,
+  "auc_pr": 0.9999904058849223,
+  "n_normal_test": 72,
+  "n_attack_test": 1990,
+  "normal_error_mean": 0.19794297218322754,
+  "normal_error_std": 0.07969684898853302,
+  "attack_error_mean": 1.080966591835022,
+  "attack_error_std": 0.4913881719112396,
+  "separation_ratio": 5.460999965667725
+}

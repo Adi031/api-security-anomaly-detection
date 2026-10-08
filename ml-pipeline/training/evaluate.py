@@ -28,7 +28,8 @@ from sklearn.metrics import (
 )
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from models.dense_autoencoder import DenseAutoencoder, DenseAutoencoderWithBatchNorm
+from models.dense_autoencoder import DenseAutoencoder
+from models.lstm_autoencoder import LSTMAutoencoder
 from models.threshold import ThresholdSelector
 
 
@@ -70,6 +71,7 @@ def load_model(model_path, model_type='dense_ae', device='cpu'):
         )
     elif model_type == 'lstm_ae':
         model = LSTMAutoencoder(
+            vocab_size=checkpoint.get('vocab_size', 9),
             input_dim=checkpoint['input_dim'],
             seq_len=checkpoint['seq_len'],
             encoder_hidden=checkpoint.get('encoder_hidden', (128, 64)),
@@ -96,7 +98,7 @@ def get_errors(model, data, device, batch_size=256):
     for i in range(0, len(tensor), batch_size):
         batch = tensor[i:i+batch_size].to(device)
         errors = model.compute_reconstruction_error(batch, reduction='none')
-        all_errors.append(errors.cpu().numpy())
+        all_errors.append(errors.detach().cpu().numpy())
     
     return np.concatenate(all_errors)
 
@@ -323,8 +325,12 @@ def main():
     
     # Load data
     print("📥 Loading test data...")
-    test_data = np.load(os.path.join(args.data_dir, 'test_features.npy'))
-    test_labels = np.load(os.path.join(args.data_dir, 'test_labels.npy'))
+    if args.model == 'lstm_ae':
+        test_data = np.load(os.path.join(args.data_dir, 'test_sequences.npy'))
+        test_labels = np.load(os.path.join(args.data_dir, 'test_seq_labels.npy'))
+    else:
+        test_data = np.load(os.path.join(args.data_dir, 'test_features.npy'))
+        test_labels = np.load(os.path.join(args.data_dir, 'test_labels.npy'))
     print(f"  Test samples: {len(test_data)} (attacks: {int(test_labels.sum())})")
     
     # Load model

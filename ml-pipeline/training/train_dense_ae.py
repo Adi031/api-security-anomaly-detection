@@ -10,6 +10,13 @@ Usage:
 """
 
 import os
+
+import random
+import numpy as np
+import torch
+random.seed(999)
+np.random.seed(999)
+torch.manual_seed(999)
 import sys
 import argparse
 import numpy as np

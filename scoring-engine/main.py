@@ -1,4 +1,6 @@
+import uvicorn
 import asyncio
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from typing import Dict, Set
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,7 +13,18 @@ from scorer import scorer
 from alerting import alert_manager
 from feature_extractor import extract_features
 
-app = FastAPI(title="API Security Scoring Engine")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    await db.connect()
+    scorer.load()
+    poll_task = asyncio.create_task(poll_database())
+    yield
+    # Shutdown
+    poll_task.cancel()
+    await db.disconnect()
+
+app = FastAPI(title="API Security Scoring Engine", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -24,6 +37,8 @@ app.add_middleware(
 active_connections: Set[WebSocket] = set()
 
 start_time = time.time()
+session_flags = {}
+
 stats = {
     "total_scored": 0,
     "alerts_by_severity": {"info": 0, "warning": 0, "critical": 0}
@@ -57,36 +72,58 @@ async def poll_database():
                         sessions[sid] = []
                     sessions[sid].append(log)
                     
+                global_scored_batch = []
                 
-                last_id = max(log['id'] for log in logs)
-
                 for sid, session_logs in sessions.items():
-                    full_session_logs = await db.fetch_session(sid)
-                    features = extract_features(full_session_logs)
-                    score, severity, feature_contributions = scorer.score_features(features)
-                    
-                    stats["total_scored"] += len(session_logs)
-                    
-                    scored_batch = []
-                    for log in session_logs:
-                        scored_batch.append((log['id'], score, severity))
-                        scored_req = {
-                            "id": log['id'],
-                            "timestamp": log['timestamp'],
-                            "user_id": log['user_id'],
-                            "session_id": sid,
-                            "ip_address": log['ip_address'],
-                            "endpoint": log['endpoint'],
-                            "anomaly_score": score,
-                            "is_anomaly": severity != "normal"
-                        }
-                        await broadcast_message({"type": "scored_request", "data": scored_req})
+                    try:
+                        latest_ts = session_logs[-1]['timestamp']
+                        full_session_logs = await db.fetch_recent_session(sid, latest_ts, seconds=60)
                         
-                    if severity != "normal":
-                        stats["alerts_by_severity"][severity] += 1
-                        alert = await alert_manager.create_alert_if_needed(sid, session_logs, score, severity, feature_contributions)
-                        if alert:
-                            await broadcast_message({"type": "alert", "data": alert})
+                        if not full_session_logs or len(full_session_logs) < 5:
+                            continue
+                            
+                        features = extract_features(full_session_logs)
+                        score, severity, feature_contributions = scorer.score_features(features)
+                        
+                        if severity != "normal":
+                            session_flags[sid] = session_flags.get(sid, 0) + 1
+                        else:
+                            session_flags[sid] = 0
+                            
+                        # Persistence rule: only flag if it's the 3rd consecutive anomaly
+                        if session_flags[sid] < 3:
+                            severity = "normal"
+                            
+                        stats["total_scored"] += len(session_logs)
+                        
+                        for log in session_logs:
+                            global_scored_batch.append((log['id'], score, severity))
+                            scored_req = {
+                                "id": log['id'],
+                                "timestamp": log['timestamp'],
+                                "user_id": log['user_id'],
+                                "session_id": sid,
+                                "ip_address": log['ip_address'],
+                                "endpoint": log['endpoint'],
+                                "anomaly_score": score,
+                                "is_anomaly": severity != "normal"
+                            }
+                            await broadcast_message({"type": "scored_request", "data": scored_req})
+                            
+                        if severity != "normal":
+                            stats["alerts_by_severity"][severity] += 1
+                            alert = await alert_manager.create_alert_if_needed(sid, session_logs, score, severity, feature_contributions)
+                            if alert:
+                                await broadcast_message({"type": "alert", "data": alert})
+                    except Exception as e:
+                        print(f"Error processing session {sid}: {e}")
+                        continue
+                
+                if global_scored_batch:
+                    await db.insert_scored_requests(global_scored_batch)
+                    
+                # Advance last_id only after successful processing
+                last_id = max(log['id'] for log in logs)
                             
                 await broadcast_message({
                     "type": "stats_update", 
@@ -104,15 +141,7 @@ async def poll_database():
             
         await asyncio.sleep(config.POLLING_INTERVAL)
 
-@app.on_event("startup")
-async def startup_event():
-    await db.connect()
-    scorer.load()
-    asyncio.create_task(poll_database())
 
-@app.on_event("shutdown")
-async def shutdown_event():
-    await db.disconnect()
 
 @app.get("/api/health")
 async def health_check():
@@ -180,3 +209,7 @@ async def websocket_endpoint(websocket: WebSocket):
         print(f"WS error: {e}")
         traceback.print_exc()
         active_connections.discard(websocket)
+
+
+if __name__ == '__main__':
+    uvicorn.run('main:app', host='0.0.0.0', port=config.PORT)
