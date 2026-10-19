@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from db import db
 from scorer import scorer
 
@@ -13,7 +13,7 @@ class AlertManager:
             feature_contributions = {"reconstruction_error": score}
         
         alert = {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "session_id": session_id,
             "user_id": last_log.get('user_id'),
             "ip_address": last_log.get('ip_address', '0.0.0.0'),

@@ -1,10 +1,8 @@
 import os
 
-BASE_DIR = os.path.dirname(__file__)
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
 class Config:
-    DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{os.path.join(BASE_DIR, '../database.sqlite')}")
-    
     # Toggle this between "dense" and "lstm"
     MODEL_TYPE = os.getenv("MODEL_TYPE", "dense")
     
@@ -20,6 +18,7 @@ class Config:
         VOCAB_PATH = os.getenv("VOCAB_PATH", os.path.join(BASE_DIR, "../ml-pipeline/data/processed/endpoint_vocab.pkl"))
         
     POLLING_INTERVAL = int(os.getenv("POLLING_INTERVAL", "2"))
+    MIN_WINDOW_REQUESTS = int(os.getenv("MIN_WINDOW_REQUESTS", "10"))
     PORT = int(os.getenv("PORT", "8001"))
 
 config = Config()

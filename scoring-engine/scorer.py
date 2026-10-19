@@ -6,20 +6,20 @@ import os
 import sys
 import pickle
 
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../ml-pipeline')))
+from features.feature_utils import extract_per_feature_errors
+
 from config import config
 
 class ModelScorer:
     def __init__(self):
         self.model = None
         self.scaler = None
-        self.thresholds = None
-        self.tau = 0.0
+        self.tau = 0.5
         self.vocab = None
         self.model_type = config.MODEL_TYPE
         
     def load(self):
-        sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../ml-pipeline')))
-        
         # Load Vocab if LSTM
         if config.MODEL_TYPE == "lstm" and os.path.exists(config.VOCAB_PATH):
             with open(config.VOCAB_PATH, 'rb') as f:
@@ -49,8 +49,8 @@ class ModelScorer:
         if os.path.exists(config.THRESHOLD_PATH):
             try:
                 with open(config.THRESHOLD_PATH, 'r') as f:
-                    self.thresholds = json.load(f)
-                    self.tau = self.thresholds.get("threshold", 0.1)
+                    data = json.load(f)
+                    self.tau = data.get("threshold", 0.5)
             except Exception as e:
                 print(f"Error loading thresholds: {e}")
                 
@@ -67,7 +67,6 @@ class ModelScorer:
                     reconstruction = self.model(tensor_features)
                     mse = torch.mean((tensor_features - reconstruction)**2).item()
                     
-                    from features.feature_utils import extract_per_feature_errors
                     feature_contributions = extract_per_feature_errors(tensor_features.numpy()[0], reconstruction.numpy()[0])
             else:
                 # LSTM scoring

@@ -105,6 +105,7 @@ def init_db():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_request_logs_traffic_type ON request_logs(traffic_type)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_alerts_timestamp ON alerts(timestamp)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_scored_requests_log_id ON scored_requests(request_log_id)")
+    cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_scored_log ON scored_requests(request_log_id)")
     
     conn.commit()
     conn.close()

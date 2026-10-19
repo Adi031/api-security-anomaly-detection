@@ -18,8 +18,6 @@ np.random.seed(999)
 torch.manual_seed(999)
 import sys
 import argparse
-import numpy as np
-import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 import matplotlib
@@ -55,7 +53,7 @@ def load_data(data_dir):
     return train, val, test, test_labels, len(vocab)
 
 
-def train_epoch(model, train_loader, optimizer, criterion, device, clip_grad=1.0):
+def train_epoch(model, train_loader, optimizer, device, clip_grad=1.0):
     """Train for one epoch with gradient clipping."""
     model.train()
     total_loss = 0.0
@@ -81,7 +79,7 @@ def train_epoch(model, train_loader, optimizer, criterion, device, clip_grad=1.0
     return total_loss / n_batches
 
 
-def validate(model, val_loader, criterion, device):
+def validate(model, val_loader, device):
     """Validate and return loss."""
     model.eval()
     total_loss = 0.0
@@ -190,7 +188,6 @@ def main():
     print(f"  Parameters: {count_parameters(model):,}")
     
     # Training setup
-    criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode='min', factor=0.5, patience=3
@@ -216,8 +213,8 @@ def main():
     best_epoch = 0
     
     for epoch in range(1, args.epochs + 1):
-        train_loss = train_epoch(model, train_loader, optimizer, criterion, device, args.clip_grad)
-        val_loss = validate(model, val_loader, criterion, device)
+        train_loss = train_epoch(model, train_loader, optimizer, device, args.clip_grad)
+        val_loss = validate(model, val_loader, device)
         
         train_losses.append(train_loss)
         val_losses.append(val_loss)

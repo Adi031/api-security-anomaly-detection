@@ -62,8 +62,7 @@ def load_model(model_path, model_type='dense_ae', device='cpu'):
     checkpoint = torch.load(model_path, map_location=device, weights_only=False)
     
     if model_type == 'dense_ae':
-        use_bn = checkpoint.get('use_batchnorm', False)
-        ModelClass = DenseAutoencoderWithBatchNorm if use_bn else DenseAutoencoder
+        ModelClass = DenseAutoencoder
         model = ModelClass(
             input_dim=checkpoint['input_dim'],
             encoding_dim=checkpoint['encoding_dim'],
@@ -317,7 +316,8 @@ def main():
         model_file = 'dense_ae_best.pt' if args.model == 'dense_ae' else 'lstm_ae_best.pt'
         args.model_path = os.path.join(base_dir, 'saved_models', model_file)
     if args.threshold_path is None:
-        args.threshold_path = os.path.join(base_dir, 'saved_models', 'threshold.json')
+        thresh_file = 'threshold.json' if args.model == 'dense_ae' else 'lstm_threshold.json'
+        args.threshold_path = os.path.join(base_dir, 'saved_models', thresh_file)
     if args.output_dir is None:
         args.output_dir = os.path.join(base_dir, 'saved_models', 'evaluation')
     

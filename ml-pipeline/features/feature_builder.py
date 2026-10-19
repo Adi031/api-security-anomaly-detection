@@ -19,7 +19,6 @@ np.random.seed(999)
 torch.manual_seed(999)
 import sys
 import argparse
-import numpy as np
 import pandas as pd
 import sqlite3
 from tqdm import tqdm
@@ -60,36 +59,6 @@ def load_logs_from_csv(filepath):
     """Load request logs from a CSV file (alternative to DB)."""
     df = pd.read_csv(filepath, parse_dates=['timestamp'])
     return df
-
-
-def compute_sequential_id_score(endpoints):
-    """
-    Measure how sequential the resource IDs in endpoint URLs are.
-    
-    High score = systematic enumeration (e.g., /api/products/1, /api/products/2, /api/products/3)
-    Low score = random/natural browsing
-    
-    Returns a score between 0 and 1.
-    """
-    import re
-    
-    # Extract numeric IDs from endpoint URLs
-    ids = []
-    for ep in endpoints:
-        match = re.search(r'/(\d+)(?:/|$)', ep)
-        if match:
-            ids.append(int(match.group(1)))
-    
-    if len(ids) < 2:
-        return 0.0
-    
-    # Calculate how many consecutive pairs differ by exactly 1
-    sequential_pairs = sum(
-        1 for i in range(len(ids) - 1) 
-        if abs(ids[i + 1] - ids[i]) == 1
-    )
-    
-    return sequential_pairs / (len(ids) - 1)
 
 
 def extract_features_for_window(window_df):
@@ -191,18 +160,28 @@ def split_and_save(features, metadata, output_dir, train_ratio=0.8, normal_only_
         attack_mask = ~normal_mask
         
         normal_features = features[normal_mask]
+        normal_metadata = [metadata[i] for i in range(len(metadata)) if normal_mask[i]]
         attack_features = features[attack_mask]
         
-        # Split normal into train/val
-        n_normal = len(normal_features)
-        n_train = int(n_normal * train_ratio)
+        # Split by session_id to prevent data leakage
+        normal_session_ids = list(set(m.get('group_id', i) for i, m in enumerate(normal_metadata)))
+        np.random.shuffle(normal_session_ids)
         
-        indices = np.random.permutation(n_normal)
-        n_val = int(n_normal * 0.15)
+        n_sessions = len(normal_session_ids)
+        n_train_sessions = int(n_sessions * train_ratio)
+        n_val_sessions = int(n_sessions * 0.15)
         
-        train_features = normal_features[indices[:n_train]]
-        val_features = normal_features[indices[n_train:n_train+n_val]]
-        test_normal_features = normal_features[indices[n_train+n_val:]]
+        train_sessions = set(normal_session_ids[:n_train_sessions])
+        val_sessions = set(normal_session_ids[n_train_sessions:n_train_sessions + n_val_sessions])
+        test_sessions = set(normal_session_ids[n_train_sessions + n_val_sessions:])
+        
+        train_mask = np.array([m.get('group_id') in train_sessions for m in normal_metadata])
+        val_mask = np.array([m.get('group_id') in val_sessions for m in normal_metadata])
+        test_mask = np.array([m.get('group_id') in test_sessions for m in normal_metadata])
+        
+        train_features = normal_features[train_mask]
+        val_features = normal_features[val_mask]
+        test_normal_features = normal_features[test_mask]
         
         # Test set includes separate normal test and all attacks
         test_features = np.concatenate([test_normal_features, attack_features])

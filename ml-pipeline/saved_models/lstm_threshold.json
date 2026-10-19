@@ -1,12 +1,12 @@
 {
-  "threshold": 0.45815420150756836,
+  "threshold": 0.4449743628501892,
   "method": "percentile-99.0",
   "stats": {
     "method": "percentile-99.0",
     "percentile": 99.0,
-    "threshold": 0.45815420150756836,
+    "threshold": 0.4449743628501892,
     "bounded_fpr": 0.01,
-    "normal_max": 0.47179433703422546,
-    "normal_min": 0.1193416640162468
+    "normal_max": 0.48461416363716125,
+    "normal_min": 0.11154904961585999
   }
 }

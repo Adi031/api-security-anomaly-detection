@@ -34,6 +34,13 @@ We built two versions of this AI:
 
 To see the system working live, open **4 separate PowerShell terminal windows** at the root of the project (`d:\Project-7th-Sem`).
 
+### First Time Setup (One-Time Only)
+Before running anything for the first time, initialize the database and seed it with sample data:
+```powershell
+python init_sqlite.py
+python target-api/seed_db.py
+```
+
 ### Terminal 1: Start the Target Website
 This runs the mock E-Commerce API that users and hackers will interact with.
 ```powershell

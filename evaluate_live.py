@@ -12,6 +12,8 @@ from db import db
 from scorer import scorer
 from feature_extractor import extract_features
 
+MIN_WINDOW_REQUESTS = int(os.getenv("MIN_WINDOW_REQUESTS", "10"))
+
 async def evaluate_live():
     print("Loading models and database...")
     await db.connect()
@@ -67,7 +69,7 @@ async def evaluate_live():
             
             window_logs.reverse() # chronological order
             
-            if len(window_logs) < 5:
+            if len(window_logs) < MIN_WINDOW_REQUESTS:
                 consecutive_flags = 0
                 continue
                 

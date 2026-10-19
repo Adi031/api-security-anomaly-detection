@@ -17,7 +17,7 @@ class Database:
         if self.conn:
             await self.conn.close()
 
-    async def fetch_new_logs(self, last_id: int):
+    async def fetch_new_logs(self, last_id: int, limit: int = None):
         query = """
             SELECT id, timestamp, user_id, session_id, ip_address, method, endpoint, 
                    status_code, response_time_ms, user_agent, request_body_size, 
@@ -26,6 +26,8 @@ class Database:
             WHERE id > ?
             ORDER BY id ASC
         """
+        if limit is not None:
+            query += f" LIMIT {limit}"
         async with self.conn.execute(query, (last_id,)) as cursor:
             records = await cursor.fetchall()
         return [dict(r) for r in records]
@@ -88,7 +90,7 @@ class Database:
 
     async def insert_scored_requests(self, batch: list):
         query = """
-            INSERT INTO scored_requests (request_log_id, anomaly_score, severity)
+            INSERT OR IGNORE INTO scored_requests (request_log_id, anomaly_score, severity)
             VALUES (?, ?, ?)
         """
         async with self.conn.executemany(query, batch) as cursor:

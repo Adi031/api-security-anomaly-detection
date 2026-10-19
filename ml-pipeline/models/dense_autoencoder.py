@@ -2,11 +2,11 @@
 Dense Autoencoder for API Behavioral Anomaly Detection (Stage 1 — Baseline)
 
 Architecture:
-  Input(14) → Dense(64, ReLU) → Dense(32, ReLU) → Dense(16, ReLU)  [Encoder]
+  Input(14) → Dense(64, ReLU) → Dense(32, ReLU) → Dense(6)          [Encoder]
                                                       ↓
-                                            Bottleneck (16-dim)
+                                             Bottleneck (6-dim)
                                                       ↓
-  Dense(16, ReLU) → Dense(32, ReLU) → Dense(64, ReLU) → Dense(14)   [Decoder]
+  Dense(32, ReLU) → Dense(64, ReLU) → Dense(14)                     [Decoder]
 
 Trained only on normal traffic. High reconstruction error = anomaly.
 """
@@ -41,7 +41,6 @@ class DenseAutoencoder(nn.Module):
             nn.Dropout(dropout),
             
             nn.Linear(32, encoding_dim),
-            nn.ReLU(),
         )
         
         # Decoder: encoding_dim → 32 → 64 → input_dim

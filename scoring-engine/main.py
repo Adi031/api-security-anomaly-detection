@@ -6,6 +6,7 @@ from typing import Dict, Set
 from fastapi.middleware.cors import CORSMiddleware
 import json
 import time
+import traceback
 
 from config import config
 from db import db
@@ -15,8 +16,13 @@ from feature_extractor import extract_features
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global last_id
     # Startup
     await db.connect()
+    # Resume from last scored position to avoid duplicate scoring on restart
+    async with db.conn.execute("SELECT COALESCE(MAX(request_log_id), 0) FROM scored_requests") as cursor:
+        row = await cursor.fetchone()
+        last_id = row[0] if row else 0
     scorer.load()
     poll_task = asyncio.create_task(poll_database())
     yield
@@ -37,7 +43,10 @@ app.add_middleware(
 active_connections: Set[WebSocket] = set()
 
 start_time = time.time()
+last_id = 0
 session_flags = {}
+session_flag_times = {}
+alert_cooldowns = {}
 
 stats = {
     "total_scored": 0,
@@ -59,10 +68,10 @@ async def broadcast_message(message: dict):
         active_connections.discard(connection)
 
 async def poll_database():
-    last_id = 0
+    global last_id
     while True:
         try:
-            logs = await db.fetch_new_logs(last_id)
+            logs = await db.fetch_new_logs(last_id, limit=5000)
             if logs:
                 # Group by session
                 sessions: Dict[str, list] = {}
@@ -79,7 +88,7 @@ async def poll_database():
                         latest_ts = session_logs[-1]['timestamp']
                         full_session_logs = await db.fetch_recent_session(sid, latest_ts, seconds=60)
                         
-                        if not full_session_logs or len(full_session_logs) < 5:
+                        if not full_session_logs or len(full_session_logs) < config.MIN_WINDOW_REQUESTS:
                             continue
                             
                         features = extract_features(full_session_logs)
@@ -89,6 +98,7 @@ async def poll_database():
                             session_flags[sid] = session_flags.get(sid, 0) + 1
                         else:
                             session_flags[sid] = 0
+                        session_flag_times[sid] = time.time()
                             
                         # Persistence rule: only flag if it's the 3rd consecutive anomaly
                         if session_flags[sid] < 3:
@@ -112,12 +122,22 @@ async def poll_database():
                             
                         if severity != "normal":
                             stats["alerts_by_severity"][severity] += 1
-                            alert = await alert_manager.create_alert_if_needed(sid, session_logs, score, severity, feature_contributions)
-                            if alert:
-                                await broadcast_message({"type": "alert", "data": alert})
+                            # Only alert if not in cooldown (60 seconds between alerts per session)
+                            if sid not in alert_cooldowns or time.time() - alert_cooldowns[sid] > 60:
+                                alert = await alert_manager.create_alert_if_needed(sid, session_logs, score, severity, feature_contributions)
+                                if alert:
+                                    alert_cooldowns[sid] = time.time()
+                                    await broadcast_message({"type": "alert", "data": alert})
                     except Exception as e:
                         print(f"Error processing session {sid}: {e}")
                         continue
+                
+                # Clean up stale session flags (sessions idle for 10+ minutes)
+                current_time = time.time()
+                stale_sessions = [s for s, t in session_flag_times.items() if current_time - t > 600]
+                for s in stale_sessions:
+                    session_flags.pop(s, None)
+                    session_flag_times.pop(s, None)
                 
                 if global_scored_batch:
                     await db.insert_scored_requests(global_scored_batch)
@@ -135,7 +155,6 @@ async def poll_database():
                 })
                             
         except Exception as e:
-            import traceback
             print(f"Error in polling task: {e}")
             traceback.print_exc()
             
@@ -178,9 +197,10 @@ async def get_sessions():
         score = 0.0
         ip = "Unknown"
         if logs:
+            ip = logs[0].get('ip_address', 'Unknown')
+        if logs and len(logs) >= config.MIN_WINDOW_REQUESTS:
             features = extract_features(logs)
             score, _, _ = scorer.score_features(features)
-            ip = logs[0].get('ip_address', 'Unknown')
             
         formatted.append({
             "session_id": s['session_id'],
@@ -205,11 +225,10 @@ async def websocket_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         active_connections.discard(websocket)
     except Exception as e:
-        import traceback
         print(f"WS error: {e}")
         traceback.print_exc()
         active_connections.discard(websocket)
 
 
 if __name__ == '__main__':
-    uvicorn.run('main:app', host='0.0.0.0', port=config.PORT)
+    uvicorn.run('main:app', host='127.0.0.1', port=config.PORT)

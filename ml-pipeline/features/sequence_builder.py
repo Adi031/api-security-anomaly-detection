@@ -24,7 +24,6 @@ random.seed(999)
 np.random.seed(999)
 torch.manual_seed(999)
 import argparse
-import numpy as np
 import pandas as pd
 import sqlite3
 import pickle

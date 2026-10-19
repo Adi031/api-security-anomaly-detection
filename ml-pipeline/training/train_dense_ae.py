@@ -19,8 +19,6 @@ np.random.seed(999)
 torch.manual_seed(999)
 import sys
 import argparse
-import numpy as np
-import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 import matplotlib
