@@ -213,7 +213,48 @@ async def get_sessions():
 @app.get("/api/sessions/{session_id}")
 async def get_session_detail(session_id: str):
     logs = await db.fetch_session(session_id)
-    return logs
+    if not logs:
+        return None
+        
+    score = 0.0
+    severity = "normal"
+    top_features = []
+    
+    if len(logs) >= config.MIN_WINDOW_REQUESTS:
+        features = extract_features(logs)
+        score, severity, contributions = scorer.score_features(features)
+        if contributions:
+            sorted_feats = sorted(contributions.items(), key=lambda x: x[1], reverse=True)
+            top_features = [f"{k} ({v:.2f})" for k, v in sorted_feats[:4] if v > 0.01]
+
+    # Calculate session duration
+    try:
+        from datetime import datetime
+        t0 = datetime.fromisoformat(logs[0]['timestamp'].replace('Z', '+00:00'))
+        t1 = datetime.fromisoformat(logs[-1]['timestamp'].replace('Z', '+00:00'))
+        duration = max(0, int((t1 - t0).total_seconds()))
+    except Exception:
+        duration = 0
+
+    return {
+        "session_id": session_id,
+        "score": score,
+        "severity": severity,
+        "ip": logs[0].get('ip_address', 'Unknown'),
+        "user_id": logs[0].get('user_id'),
+        "duration": duration,
+        "features": top_features,
+        "requests": [
+            {
+                "timestamp": l["timestamp"],
+                "score": score,
+                "method": l["method"],
+                "path": l["endpoint"],
+                "status_code": l.get("status_code", 200)
+            }
+            for l in logs[-50:]
+        ]
+    }
 
 @app.websocket("/ws/live")
 async def websocket_endpoint(websocket: WebSocket):

@@ -108,6 +108,7 @@ function App() {
         <SessionDrilldown 
           isOpen={!!selectedSession} 
           sessionId={selectedSession} 
+          threshold={stats.model_info?.threshold || 0.29}
           onClose={() => setSelectedSession(null)} 
         />
       </main>

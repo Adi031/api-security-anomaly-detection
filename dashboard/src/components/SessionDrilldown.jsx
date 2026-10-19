@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { fetchSessionDetail } from '../utils/api';
 import { truncateId, formatDuration, formatScore, getSeverityColor } from '../utils/formatters';
 
-export const SessionDrilldown = ({ sessionId, isOpen, onClose }) => {
+export const SessionDrilldown = ({ sessionId, isOpen, onClose, threshold = 0.29 }) => {
   const [details, setDetails] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -19,6 +19,10 @@ export const SessionDrilldown = ({ sessionId, isOpen, onClose }) => {
   }, [isOpen, sessionId]);
 
   if (!isOpen) return null;
+
+  const severity = details?.severity || (
+    details?.score >= threshold * 2 ? 'critical' : details?.score >= threshold ? 'warning' : 'normal'
+  );
 
   return (
     <div className={`right-panel ${isOpen ? 'open' : ''}`}>
@@ -40,7 +44,7 @@ export const SessionDrilldown = ({ sessionId, isOpen, onClose }) => {
           <div style={{ textAlign: 'center', color: 'var(--color-text-secondary)', marginTop: '40px' }}>Loading...</div>
         ) : details ? (
           <>
-            <div className="card" style={{ padding: '16px', borderLeft: `3px solid ${getSeverityColor(details.score >= 90 ? 'critical' : details.score >= 70 ? 'warning' : 'normal')}` }}>
+            <div className="card" style={{ padding: '16px', borderLeft: `3px solid ${getSeverityColor(severity)}` }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
                   <div className="text-muted" style={{ fontSize: '11px', textTransform: 'uppercase' }}>Session ID</div>
@@ -48,7 +52,7 @@ export const SessionDrilldown = ({ sessionId, isOpen, onClose }) => {
                 </div>
                 <div>
                   <div className="text-muted" style={{ fontSize: '11px', textTransform: 'uppercase' }}>Risk Score</div>
-                  <div style={{ fontWeight: 700, fontSize: '16px', color: getSeverityColor(details.score >= 90 ? 'critical' : details.score >= 70 ? 'warning' : 'normal') }}>
+                  <div style={{ fontWeight: 700, fontSize: '16px', color: getSeverityColor(severity) }}>
                     {formatScore(details.score)}
                   </div>
                 </div>
@@ -84,8 +88,8 @@ export const SessionDrilldown = ({ sessionId, isOpen, onClose }) => {
                   <div key={i} style={{ padding: '10px', background: 'rgba(255,255,255,0.02)', borderRadius: '4px', fontSize: '12px' }}>
                     <div className="flex justify-between" style={{ marginBottom: '4px' }}>
                       <span style={{ color: 'var(--color-text-secondary)' }}>{new Date(req.timestamp).toLocaleTimeString()}</span>
-                      <span style={{ color: getSeverityColor(req.score >= 90 ? 'critical' : req.score >= 70 ? 'warning' : 'normal') }}>
-                        Score: {req.score?.toFixed(1)}
+                      <span style={{ color: getSeverityColor(req.score >= threshold * 2 ? 'critical' : req.score >= threshold ? 'warning' : 'normal') }}>
+                        Score: {formatScore(req.score)}
                       </span>
                     </div>
                     <div style={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>
