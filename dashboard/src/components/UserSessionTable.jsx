@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { truncateId, formatScore, getSeverityColor } from '../utils/formatters';
 
-export const UserSessionTable = ({ sessions, onSessionClick, threshold = 0.526 }) => {
+export const UserSessionTable = ({ sessions, onSessionClick, threshold = 0.65 }) => {
   const warningLine = threshold;
   const criticalLine = threshold * 2;
   const [sortConfig, setSortConfig] = useState({ key: 'score', direction: 'desc' });

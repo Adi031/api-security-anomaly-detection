@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { fetchSessionDetail } from '../utils/api';
 import { truncateId, formatDuration, formatScore, getSeverityColor } from '../utils/formatters';
 
-export const SessionDrilldown = ({ sessionId, isOpen, onClose, threshold = 0.29 }) => {
+export const SessionDrilldown = ({ sessionId, isOpen, onClose, threshold = 0.65 }) => {
   const [details, setDetails] = useState(null);
   const [loading, setLoading] = useState(false);
 

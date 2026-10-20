@@ -1,17 +1,17 @@
 {
   "model_name": "lstm_ae",
-  "threshold": 0.4449743628501892,
+  "threshold": 0.4939241409301758,
   "threshold_method": "percentile-99.0",
   "precision": 1.0,
-  "recall": 1.0,
-  "f1_score": 1.0,
+  "recall": 0.8529411764705882,
+  "f1_score": 0.9206349206349206,
   "auc_roc": 1.0,
-  "auc_pr": 0.9999999999999998,
-  "n_normal_test": 53,
-  "n_attack_test": 33,
-  "normal_error_mean": 0.21597644686698914,
-  "normal_error_std": 0.07004939019680023,
-  "attack_error_mean": 1.1216827630996704,
-  "attack_error_std": 0.2921485900878906,
-  "separation_ratio": 5.193542003631592
+  "auc_pr": 1.0,
+  "n_normal_test": 28,
+  "n_attack_test": 34,
+  "normal_error_mean": 0.2785772979259491,
+  "normal_error_std": 0.10949114710092545,
+  "attack_error_mean": 0.8712955713272095,
+  "attack_error_std": 0.26516374945640564,
+  "separation_ratio": 3.12766170501709
 }

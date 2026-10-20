@@ -83,7 +83,7 @@ def login():
             
             token = jwt.encode({
                 'user_id': user[0],
-                'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=1)
+                'exp': datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=1)
             }, Config.SECRET_KEY, algorithm="HS256")
             
             return jsonify({'token': token})

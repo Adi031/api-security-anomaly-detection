@@ -65,7 +65,13 @@ class Database:
         return [dict(r) for r in records]
         
     async def fetch_session(self, session_id: str):
-        query = "SELECT * FROM request_logs WHERE session_id = ? ORDER BY timestamp ASC"
+        query = """
+            SELECT r.*, s.anomaly_score, s.severity as scored_severity
+            FROM request_logs r
+            LEFT JOIN scored_requests s ON r.id = s.request_log_id
+            WHERE r.session_id = ?
+            ORDER BY r.timestamp ASC
+        """
         async with self.conn.execute(query, (session_id,)) as cursor:
             records = await cursor.fetchall()
         return [dict(r) for r in records]

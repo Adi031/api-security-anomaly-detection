@@ -88,26 +88,53 @@ async def poll_database():
                         latest_ts = session_logs[-1]['timestamp']
                         full_session_logs = await db.fetch_recent_session(sid, latest_ts, seconds=60)
                         
-                        if not full_session_logs or len(full_session_logs) < config.MIN_WINDOW_REQUESTS:
+                        if not full_session_logs:
                             continue
-                            
-                        features = extract_features(full_session_logs)
-                        score, severity, feature_contributions = scorer.score_features(features)
                         
-                        if severity != "normal":
+                        full_session_logs.sort(key=lambda x: x['timestamp'])
+                        
+                        overall_score = 0.0
+                        raw_overall_severity = "normal"
+                        overall_contributions = {}
+                        
+                        if len(full_session_logs) >= config.MIN_WINDOW_REQUESTS:
+                            features = extract_features(full_session_logs)
+                            overall_score, raw_overall_severity, overall_contributions = scorer.score_features(features)
+                        else:
+                            # Fast-path check for short burst attacks (e.g. failed login spray or rapid probe)
+                            err_logs = [l for l in full_session_logs if l.get('status_code', 200) >= 400]
+                            if len(full_session_logs) >= 3 and len(err_logs) / len(full_session_logs) >= 0.75:
+                                overall_score = scorer.tau * 1.5
+                                raw_overall_severity = "warning"
+                                overall_contributions = {"rapid_error_burst": 1.0}
+                        
+                        if raw_overall_severity != "normal":
                             session_flags[sid] = session_flags.get(sid, 0) + 1
                         else:
                             session_flags[sid] = 0
                         session_flag_times[sid] = time.time()
                             
-                        # Persistence rule: only flag if it's the 3rd consecutive anomaly
-                        if session_flags[sid] < 3:
-                            severity = "normal"
-                            
                         stats["total_scored"] += len(session_logs)
                         
+                        # Score individual requests with their trailing window
                         for log in session_logs:
-                            global_scored_batch.append((log['id'], score, severity))
+                            req_ts = log['timestamp']
+                            trailing_reqs = [l for l in full_session_logs if l['timestamp'] <= req_ts]
+                            req_score = 0.0
+                            raw_req_sev = "normal"
+                            
+                            if len(trailing_reqs) >= config.MIN_WINDOW_REQUESTS:
+                                req_feats = extract_features(trailing_reqs)
+                                req_score, raw_req_sev, _ = scorer.score_features(req_feats)
+                            elif len(trailing_reqs) >= 3:
+                                err_count = sum(1 for r in trailing_reqs if r.get('status_code', 200) >= 400)
+                                if err_count / len(trailing_reqs) >= 0.75:
+                                    req_score = scorer.tau * 1.5
+                                    raw_req_sev = "warning"
+                            
+                            # Store raw model severity to preserve raw decisions in DB
+                            global_scored_batch.append((log['id'], req_score, raw_req_sev))
+                            
                             scored_req = {
                                 "id": log['id'],
                                 "timestamp": log['timestamp'],
@@ -115,16 +142,17 @@ async def poll_database():
                                 "session_id": sid,
                                 "ip_address": log['ip_address'],
                                 "endpoint": log['endpoint'],
-                                "anomaly_score": score,
-                                "is_anomaly": severity != "normal"
+                                "anomaly_score": req_score,
+                                "is_anomaly": raw_req_sev != "normal"
                             }
                             await broadcast_message({"type": "scored_request", "data": scored_req})
                             
-                        if severity != "normal":
-                            stats["alerts_by_severity"][severity] += 1
+                        # Persistence rule: only trigger alerts on 3rd consecutive anomaly
+                        if session_flags[sid] >= 3 and raw_overall_severity != "normal":
+                            stats["alerts_by_severity"][raw_overall_severity] += 1
                             # Only alert if not in cooldown (60 seconds between alerts per session)
                             if sid not in alert_cooldowns or time.time() - alert_cooldowns[sid] > 60:
-                                alert = await alert_manager.create_alert_if_needed(sid, session_logs, score, severity, feature_contributions)
+                                alert = await alert_manager.create_alert_if_needed(sid, session_logs, overall_score, raw_overall_severity, overall_contributions)
                                 if alert:
                                     alert_cooldowns[sid] = time.time()
                                     await broadcast_message({"type": "alert", "data": alert})
@@ -132,12 +160,16 @@ async def poll_database():
                         print(f"Error processing session {sid}: {e}")
                         continue
                 
-                # Clean up stale session flags (sessions idle for 10+ minutes)
+                # Clean up stale session flags and alert cooldowns (sessions idle for 10+ minutes)
                 current_time = time.time()
                 stale_sessions = [s for s, t in session_flag_times.items() if current_time - t > 600]
                 for s in stale_sessions:
                     session_flags.pop(s, None)
                     session_flag_times.pop(s, None)
+                    
+                stale_cooldowns = [s for s, t in alert_cooldowns.items() if current_time - t > 600]
+                for s in stale_cooldowns:
+                    alert_cooldowns.pop(s, None)
                 
                 if global_scored_batch:
                     await db.insert_scored_requests(global_scored_batch)
@@ -150,6 +182,10 @@ async def poll_database():
                     "data": {
                         "total_scored": stats["total_scored"],
                         "alerts_by_severity": stats["alerts_by_severity"],
+                        "model_info": {
+                            "type": scorer.model_type,
+                            "threshold": scorer.tau
+                        },
                         "uptime": time.time() - start_time
                     }
                 })
@@ -247,12 +283,14 @@ async def get_session_detail(session_id: str):
         "requests": [
             {
                 "timestamp": l["timestamp"],
-                "score": score,
+                "score": float(l["anomaly_score"]) if l.get("anomaly_score") is not None else (
+                    score if len(logs) >= config.MIN_WINDOW_REQUESTS and idx >= config.MIN_WINDOW_REQUESTS - 1 else 0.0
+                ),
                 "method": l["method"],
                 "path": l["endpoint"],
                 "status_code": l.get("status_code", 200)
             }
-            for l in logs[-50:]
+            for idx, l in enumerate(logs[-50:])
         ]
     }
 

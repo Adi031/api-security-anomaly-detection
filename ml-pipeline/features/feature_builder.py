@@ -76,17 +76,21 @@ def extract_features_for_window(window_df):
     return extract_features_from_records(window_df.to_dict('records'))
 
 
-def build_feature_matrix(df, window_seconds=60, stride_seconds=30, group_by='session_id'):
+def build_feature_matrix(df, window_seconds=60, stride_seconds=30, group_by='session_id', min_requests=None, step=2):
     """
-    Build feature matrix from raw request logs.
+    Build feature matrix from raw request logs using trailing windows.
     
-    Groups requests by session/user and extracts features for each time window.
+    Extracts trailing 60s windows ending at sampled requests (every `step` requests),
+    matching the trailing evaluation window of the live scoring engine.
+    Only windows with at least `min_requests` (MIN_WINDOW_REQUESTS, default 10) are kept.
     
     Args:
         df: DataFrame of request logs
-        window_seconds: Window size in seconds
-        stride_seconds: Stride between windows
+        window_seconds: Window size in seconds (default: 60)
+        stride_seconds: Retained for CLI compatibility
         group_by: Column to group by ('session_id' or 'user_id' or 'ip_address')
+        min_requests: Minimum requests in a window (default: 10 or MIN_WINDOW_REQUESTS env)
+        step: Stride in number of requests between sampled trailing windows (default: 2)
         
     Returns:
         features: numpy array of shape (N, NUM_FEATURES)
@@ -95,32 +99,32 @@ def build_feature_matrix(df, window_seconds=60, stride_seconds=30, group_by='ses
     df = df.copy()
     df['timestamp'] = pd.to_datetime(df['timestamp'])
     
+    if min_requests is None:
+        min_requests = int(os.getenv("MIN_WINDOW_REQUESTS", "10"))
+        
     all_features = []
     all_metadata = []
     
     groups = df.groupby(group_by)
     
     for group_id, group_df in tqdm(groups, desc=f"Extracting features (by {group_by})"):
-        group_df = group_df.sort_values('timestamp')
+        group_df = group_df.sort_values('timestamp').reset_index(drop=True)
         
-        if len(group_df) < 2:
+        if len(group_df) < min_requests:
             continue
         
-        start_time = group_df['timestamp'].min()
-        end_time = group_df['timestamp'].max()
-        
-        # Sliding window
-        current_start = start_time
-        while current_start < end_time:
-            current_end = current_start + timedelta(seconds=window_seconds)
+        # Trailing 60s window ending at each sampled request
+        for i in range(0, len(group_df), step):
+            current_end = group_df['timestamp'].iloc[i]
+            current_start = current_end - timedelta(seconds=window_seconds)
             
             window_mask = (
                 (group_df['timestamp'] >= current_start) & 
-                (group_df['timestamp'] < current_end)
+                (group_df['timestamp'] <= current_end)
             )
             window_df = group_df[window_mask]
             
-            if len(window_df) >= 2:  # Need at least 2 requests for meaningful features
+            if len(window_df) >= min_requests:
                 features = extract_features_for_window(window_df)
                 if features is not None:
                     traffic_type = window_df['traffic_type'].iloc[0] if 'traffic_type' in window_df.columns else 'normal'
@@ -133,8 +137,6 @@ def build_feature_matrix(df, window_seconds=60, stride_seconds=30, group_by='ses
                         'request_count': len(window_df),
                         'traffic_type': traffic_type,
                     })
-            
-            current_start += timedelta(seconds=stride_seconds)
     
     if not all_features:
         print("WARNING: No features extracted! Check your data.")
@@ -252,6 +254,10 @@ def main():
                         help='Output directory (default: data/processed/)')
     parser.add_argument('--train-ratio', type=float, default=0.8,
                         help='Fraction of data for training (default: 0.8)')
+    parser.add_argument('--min-requests', type=int, default=int(os.getenv("MIN_WINDOW_REQUESTS", "10")),
+                        help='Minimum requests in a window (default: 10)')
+    parser.add_argument('--step', type=int, default=2,
+                        help='Step size between trailing window samples (default: 2)')
     
     args = parser.parse_args()
     
@@ -292,7 +298,9 @@ def main():
         df, 
         window_seconds=args.window, 
         stride_seconds=args.stride,
-        group_by=args.group_by
+        group_by=args.group_by,
+        min_requests=args.min_requests,
+        step=args.step
     )
     
     print(f"   Extracted {len(features)} feature vectors")

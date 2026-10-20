@@ -38,12 +38,14 @@ function App() {
     const { type, data } = lastMessage;
 
     if (type === 'stats_update') {
-      setStats({
+      setStats(prev => ({
+        ...prev,
         totalRequests: data.total_scored || 0,
         activeSessions: sessions.length,
         warnings: data.alerts_by_severity?.warning || 0,
-        criticalAlerts: data.alerts_by_severity?.critical || 0
-      });
+        criticalAlerts: data.alerts_by_severity?.critical || 0,
+        model_info: data.model_info || prev.model_info
+      }));
     } else if (type === 'scored_request') {
       // Update chart
       setChartData(prev => {
@@ -93,14 +95,14 @@ function App() {
           <SystemStats stats={stats} />
           
           <div className="flex gap-4" style={{ height: '300px' }}>
-            <AnomalyScoreChart data={chartData} threshold={stats.model_info?.threshold || 0.526} />
+            <AnomalyScoreChart data={chartData} threshold={stats.model_info?.threshold || 0.65} />
             <RequestTimeline requests={requests} />
           </div>
 
           <UserSessionTable 
             sessions={sessions} 
             onSessionClick={setSelectedSession} 
-            threshold={stats.model_info?.threshold || 0.526}
+            threshold={stats.model_info?.threshold || 0.65}
           />
         </section>
 
@@ -108,7 +110,7 @@ function App() {
         <SessionDrilldown 
           isOpen={!!selectedSession} 
           sessionId={selectedSession} 
-          threshold={stats.model_info?.threshold || 0.29}
+          threshold={stats.model_info?.threshold || 0.65}
           onClose={() => setSelectedSession(null)} 
         />
       </main>

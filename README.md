@@ -80,3 +80,31 @@ $env:PYTHONUTF8=1
 python run_experiments.py
 ```
 This will take a few minutes. When it finishes, it will print out a highly rigorous statistical table showing the Precision, Recall, and AUC (Accuracy) of the newly trained models!
+
+
+---
+
+## 📊 Evaluation & Benchmarks (Session-Level Results)
+
+We benchmarked the trained Dense Autoencoder using real-time replay evaluation (`evaluate_live.py`) across all 582 recorded sessions (9,162 requests) under real-world traffic dynamics:
+
+| Traffic Profile | Total Sessions | Sessions Flagged | Detection / False Alarm Rate |
+| :--- | :---: | :---: | :---: |
+| **Credential Stuffing** | 4 | 4 | **100.0%** (Detected) |
+| **BOLA / Enumeration** | 4 | 4 | **100.0%** (Detected) |
+| **Data Scraping** | 4 | 4 | **100.0%** (Detected) |
+| **Privilege Probes** | 4 | 4 | **100.0%** (Detected) |
+| **Normal Users** | 458 | 0 | **0.0%** (No False Alarms) |
+| **Power Users (Busy Legitimate)** | 108 | 0 | **0.0%** (No False Alarms) |
+
+### Key Architectural Safeguards:
+1. **Trailing Window Sampling with 10-Request Gate:**
+   - Both feature generation (`feature_builder.py`) and live scoring (`scoring-engine/main.py`) evaluate trailing 60-second windows ending at requests with `MIN_WINDOW_REQUESTS = 10`.
+   - By including legitimate power-user windows during training, the model understands high-throughput legitimate user behavior and achieves a 0.0% false alarm rate.
+2. **Short-Burst Heuristic Fast Path:**
+   - For short sessions under 10 requests, a fast-path heuristic monitors error concentration ($\ge 3$ consecutive errors with $\ge 75\%$ error rate within $<15$s), detecting rapid brute-force sprays or probes without requiring a full 10-request window.
+3. **Persistence Rule & Raw Audit Logging:**
+   - The engine flags alerts only on the 3rd consecutive anomalous window (with 60s per-session alert cooldowns).
+   - Raw model scores and raw anomaly classifications are preserved in `scored_requests` for complete auditability.
+4. **Dynamic Threshold Loading:**
+   - The SOC dashboard dynamically queries `/api/stats` to adapt to the calibrated model threshold ($	au = 0.648$ for Dense Autoencoder).
