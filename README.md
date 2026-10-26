@@ -9,14 +9,14 @@ This project is an intelligent behavioral security system designed to protect We
 It monitors live HTTP traffic on a realistic E-Commerce API (covering user authentication, catalog browsing, cart operations, and order placement). The scoring engine evaluates client traffic over trailing 60-second sliding windows. If a client exhibits anomalous behavioral patterns across multiple consecutive evaluation windows, the system flags the session and raises high-priority alerts on the Security Operations Center (SOC) dashboard.
 
 ## Which attacks does it detect?
-The system evaluates seven attack profiles across key OWASP API Security Top 10 categories, including high-speed automated bots and stealthy human-paced evasive variants:
+The system evaluates seven attack profiles across key OWASP API Security Top 10 categories, spanning 4 high-speed automated bots and 3 stealthy human-paced evasive variants (detecting **6 of 7 attack types overall**, including **2 of 3 slow attack types**):
 1. **Credential Stuffing (Fast Bot):** High-velocity automated password guessing against `/api/auth/login`.
 2. **Slow Credential Stuffing (Evasive):** Low-frequency brute-force attempts spaced at 2–4s human intervals.
 3. **Data Scraping (Fast Bot):** High-frequency automated harvesting of the entire product catalog.
 4. **BOLA / Enumeration (Fast Bot):** Systematic sequential probing of `/api/orders/:id` and `/api/users/:id`.
 5. **Slow Enumeration (Evasive):** Shuffled order/user probes intermixed with legitimate product browsing at 2–4s intervals.
 6. **Privilege Probing (Fast Bot):** Probing unauthorized administrative endpoints (e.g., `/api/users/:id/profile`).
-7. **Slow Privilege Probing (Evasive):** Occasional administrative probes concealed inside browsing sessions.
+7. **Slow Privilege Probing (Evasive):** Occasional administrative probes concealed inside browsing sessions (documented aggregation limitation: 0 of 4 caught).
 
 ## How does it do it? (The Machine Learning Architecture)
 The pipeline employs an **Autoencoder** neural network trained exclusively on legitimate human and power-user sessions (semi-supervised anomaly detection):
@@ -27,8 +27,8 @@ The pipeline employs an **Autoencoder** neural network trained exclusively on le
 5. **Window Gate & Persistence Rule:** To eliminate false positives from short sessions and transient spikes, scoring requires a minimum of 10 requests in the trailing 60s window (`MIN_WINDOW_REQUESTS = 10`), and an alert is raised only when **3 consecutive evaluation windows** exceed threshold $\tau$.
 
 We evaluate two architectures:
-- **Dense Autoencoder (Primary & Default):** Evaluates 11 statistical behavioral features over 60-second trailing windows. Latency < 2ms, calibrated threshold $\tau = 0.455855$.
-- **LSTM Autoencoder (Sequential):** Evaluates sequences of 30 endpoint transitions and timing deltas (feature dimension 10, vocabulary size 10, threshold $\tau = 0.316657$).
+- **Dense Autoencoder (Primary & Default Live Detector):** Evaluates 11 statistical behavioral features over 60-second trailing windows. Latency < 2ms. The threshold is calibrated at **$3.5\times P_{99}$** of validation (legitimate-only) errors ($\tau = 0.455855$) with session headroom. This model serves live traffic in the real-time scoring engine.
+- **LSTM Autoencoder (Sequential Benchmark):** Evaluates sequences of 30 endpoint transitions and timing deltas (feature dimension 10, vocabulary size 10). The threshold uses a **plain $P_{99}$ with no headroom** ($\tau = 0.316657$). Note that the Dense model is the default, and the LSTM was evaluated on offline sequence splits and **not tested as the live detector** in the real-time scoring engine.
 
 ---
 
@@ -38,7 +38,7 @@ During testing on Windows environments, an artificial timing bottleneck was iden
 - **`http://127.0.0.1:5000`:** Median curl request duration = **0.0152s** (0.013s, 0.015s, 0.015s, 0.016s, 0.018s)
 
 ### Why BASE_URL was changed to `http://127.0.0.1:5000`
-On Windows, HTTP clients resolving `localhost` first attempt IPv6 `::1` resolution before timing out and falling back to IPv4 `127.0.0.1`. This introduced an artificial 200–240ms network latency per request, which inadvertently capped automated attack scripts to $\approx 2.1\text{s}$ median request gaps and masked true bot speeds. Switching `BASE_URL` to explicit `http://127.0.0.1:5000` yielded a **16× speedup** (0.015s vs 0.239s), allowing automated attacks to burst at realistic sub-second rates (median gap 0.157s) and ensuring training inter-arrival times match live client execution.
+On Windows, HTTP clients resolving `localhost` first attempt IPv6 `::1` resolution before timing out and falling back to IPv4 `127.0.0.1`. The measured delay was **about 0.22 s with curl, about 2 s for the Python client on this machine** (due to socket/DNS resolution overhead accumulating across connection pooling). This inadvertently capped automated attack scripts in the simulator to $\approx 2.07\text{s}$ inter-request gaps, masking true bot burst velocities. Switching `BASE_URL` to explicit `http://127.0.0.1:5000` eliminated this DNS bottleneck completely (0.015s vs 0.239s in curl), allowing automated attacks to burst at realistic sub-second rates (median gap 0.157s) and ensuring training inter-arrival times match live client execution.
 
 ---
 
@@ -105,8 +105,8 @@ Three independent out-of-sample live evaluation runs were conducted on brand-new
 - **Power Users False Alarm Rate:** **0 / 21 (0.0%)** of gate-reaching sessions across all runs.
 - **Combined Legitimate False Alarm Rate:** **0 / 101 (0.0%)**.
 - **Fast Attack Detection Rate:** **12 / 12 (100.0%)** (4/4 on each run).
-- **Slow Attack Detection Rate:** **6 / 9 (66.7%)** (detected slow credential stuffing and slow enumeration in all runs; missed slow privilege probe).
-- **Overall Attack Detection Rate:** **18 / 21 (85.7%)** across all runs.
+- **Slow Attack Detection Rate:** **2 of 3 slow attack types detected** (6 / 9 sessions flagged; caught slow credential stuffing and slow enumeration in all runs, but missed slow privilege probe: 0 / 4 caught across runs).
+- **Overall Attack Detection Rate:** **6 of 7 attack types detected** (18 / 21 session-level alerts across all runs).
 
 ---
 
@@ -115,8 +115,8 @@ Three independent out-of-sample live evaluation runs were conducted on brand-new
 2. **10-Request Window Gate:** The trailing 60s sliding window enforces `MIN_WINDOW_REQUESTS = 10`. Sessions ending before reaching 10 requests (e.g., a visitor who browses 3 products and departs) are never evaluated by the anomaly detector.
 3. **Small Attack Sample Size per Live Run:** In each live run, 1 session of each attack profile is unleashed against 12 concurrent users to model an opportunistic intrusion in ongoing traffic. While this tests real-time alerting sensitivity, statistical variance in attack detection is best evaluated alongside the offline test set (2,483 attack windows).
 4. **Environment-Dependent Timing Features:** Inter-arrival time features (`mean_inter_request_time`, `min_inter_request_time`, `std_inter_request_time`) are influenced by the host machine's CPU speed, operating system scheduler, and network stack. If deploying this codebase to a different server or operating system, traffic generation and feature extraction must be re-run to recalibrate the baseline distribution.
-5. **LSTM Steady-State Scraping Detection:** The LSTM autoencoder evaluates sequential endpoint transition paths. In steady-state scraping where an attacker continuously requests `/api/products/<ID>` in a loop, sequential transition novelty is low; hence LSTM recall on scraping is lower than the Dense Autoencoder. The Dense Autoencoder is therefore designated as the primary detection model.
-6. **Slow Privilege Probe Detection Limit:** In `slow_privilege_probe`, an attacker makes only 4 unauthorized requests across a 26-request session with 3–6s delays. Because requests are widely spaced, a 60-second window contains only 1 error out of 12 requests ($<8\%$ error ratio), which does not persist across 3 consecutive sliding windows. Detecting such ultra-low-frequency attacks requires longer temporal aggregation windows (> 5 minutes).
+5. **LSTM Detector Scope & Steady-State Scraping:** The LSTM autoencoder evaluates sequential endpoint transition paths. In steady-state scraping where an attacker continuously requests `/api/products/<ID>` in a loop, sequential transition novelty is low. Furthermore, the LSTM threshold rule is a plain $P_{99}$ with no headroom ($\tau = 0.316657$), unlike the Dense model's $3.5\times P_{99}$ headroom calibration ($\tau = 0.455855$). The Dense Autoencoder is designated as the primary default detector; the LSTM was evaluated offline on sequence splits and was not tested as the live detector in the live scoring engine.
+6. **Slow Privilege Probe Detection Limit:** In `slow_privilege_probe`, an attacker makes only 4 unauthorized requests across a 26-request session with 3–6s delays (0 of 4 caught across runs). Because requests are widely spaced, a 60-second window contains only 1 error out of 12 requests ($<8\%$ error ratio), which does not persist across 3 consecutive sliding windows. Detecting such ultra-low-frequency attacks requires longer temporal aggregation windows (> 5 minutes).
 7. **Threshold Calibration Strategy:** The decision threshold is mathematically fixed at $\tau = 3.5 \times P_{99}(\text{val\_errors})$ on legitimate-only validation data. While this guarantees zero attack label leakage and absorbs session-level sliding-window variance, it is tuned for high precision to protect legitimate users.
 
 ---
@@ -189,4 +189,4 @@ python run_single_eval.py 3
 ---
 
 ## 📜 Academic Integrity & AI Assistance
-In accordance with academic and institutional project guidelines, AI assistance (Google DeepMind Antigravity / Claude) was utilized for exploratory pair programming, test script automation, and debugging timing discrepancies on Windows network stacks. All architectural decisions, feature engineering, mathematical models, and reported experimental numbers were validated and reproduced through executed code.
+In accordance with academic and institutional project guidelines, AI assistance (Google DeepMind Antigravity and Anthropic Claude) was utilized for exploratory pair programming, debugging the Windows IPv6 localhost DNS socket delay, refactoring trailing-window feature extraction, and developing test automation harnesses (`run_single_eval.py`). All core architectural choices, feature definitions, model training, evaluation executions, and reported experimental numbers were performed, verified, and validated on local hardware.
