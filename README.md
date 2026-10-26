@@ -3,108 +3,190 @@
 **A B.Tech CSE 7th Semester Major Project**
 
 ## What is this project?
-This project is an advanced cybersecurity system that acts like a security guard for a web application (API). Instead of relying on hardcoded rules (like blocking a specific IP address), it uses **Machine Learning (Artificial Intelligence)** to automatically learn what a "normal" user looks like. If an attacker tries to hack the system, their behavior will look mathematically different from a normal user, and the AI will catch them in real-time.
+This project is an intelligent behavioral security system designed to protect Web Application Programming Interfaces (APIs). Instead of relying on rigid, hardcoded rules (such as IP blocklists or static rate limits), it utilizes **Semi-Supervised Deep Learning (Autoencoders)** to learn the statistical and sequential dynamics of legitimate user behavior. When an attacker conducts automated, high-velocity, or stealthy human-paced attacks, their behavioral pattern deviates from normal and power-user baselines, enabling the system to detect and flag intrusions in real time.
 
 ## What does it do?
-It monitors live traffic on a mock E-Commerce website. It looks at every action a user takes (logging in, browsing products, adding to cart). The AI analyzes this behavior every 2 seconds. If a user starts acting like an automated bot or a hacker, the system instantly flags them and alerts the Security Operations Center (SOC) dashboard.
+It monitors live HTTP traffic on a realistic E-Commerce API (covering user authentication, catalog browsing, cart operations, and order placement). The scoring engine evaluates client traffic over trailing 60-second sliding windows. If a client exhibits anomalous behavioral patterns across multiple consecutive evaluation windows, the system flags the session and raises high-priority alerts on the Security Operations Center (SOC) dashboard.
 
-## Which attacks does it prevent?
-The AI is currently trained to detect four major types of cyber attacks:
-1. **Credential Stuffing (Brute Force):** Hackers trying thousands of stolen passwords on the login page in seconds.
-2. **Data Scraping:** Automated bots rapidly downloading the entire product catalog without pausing to actually "read" the pages like a human would.
-3. **BOLA / Enumeration:** Hackers systematically guessing `user_id` or `order_id` numbers (e.g., trying user 1, user 2, user 3) to steal other people's private data.
-4. **Privilege Probes:** Attackers trying to access hidden admin URLs (e.g., `/api/admin/delete`) that they aren't supposed to know about.
+## Which attacks does it detect?
+The system evaluates seven attack profiles across key OWASP API Security Top 10 categories, including high-speed automated bots and stealthy human-paced evasive variants:
+1. **Credential Stuffing (Fast Bot):** High-velocity automated password guessing against `/api/auth/login`.
+2. **Slow Credential Stuffing (Evasive):** Low-frequency brute-force attempts spaced at 2–4s human intervals.
+3. **Data Scraping (Fast Bot):** High-frequency automated harvesting of the entire product catalog.
+4. **BOLA / Enumeration (Fast Bot):** Systematic sequential probing of `/api/orders/:id` and `/api/users/:id`.
+5. **Slow Enumeration (Evasive):** Shuffled order/user probes intermixed with legitimate product browsing at 2–4s intervals.
+6. **Privilege Probing (Fast Bot):** Probing unauthorized administrative endpoints (e.g., `/api/users/:id/profile`).
+7. **Slow Privilege Probing (Evasive):** Occasional administrative probes concealed inside browsing sessions.
 
-## How does it do it? (The Machine Learning)
-We use a Machine Learning architecture called an **Autoencoder**. 
-1. We train the AI purely on normal human traffic. The AI learns how humans click, how long they wait between clicks, and what pages they visit.
-2. When live traffic comes in, the AI tries to "reconstruct" the behavior based on what it knows about normal humans.
-3. If an attacker uses an automated bot script, the bot behaves completely differently than a human. The AI fails to reconstruct the behavior, which causes a mathematical spike called **Mean Squared Error (MSE)**.
-4. If this error spikes too high for 3 consecutive checks (the Persistence Rule), the system mathematically proves it is a cyber attack and triggers an alert.
+## How does it do it? (The Machine Learning Architecture)
+The pipeline employs an **Autoencoder** neural network trained exclusively on legitimate human and power-user sessions (semi-supervised anomaly detection):
+1. **Feature Extraction:** Over trailing 60-second windows ending at every request, traffic is summarized into **11 behavioral features** capturing request velocity, inter-arrival timing dynamics, endpoint diversity, HTTP POST ratios, sequential ID probing, and error/authentication failure proportions.
+2. **Reconstruction Loss:** The autoencoder compresses the 11-dimensional feature vector into a lower-dimensional latent representation (dim=6) and attempts to reconstruct it.
+3. **Anomaly Scoring:** Legitimate sessions reconstruct with low Mean Squared Error (MSE), whereas attack behaviors produce high reconstruction errors.
+4. **Calibrated Threshold ($\tau = 0.455855$) with Zero Attack Leakage:** The threshold is calibrated strictly on validation data as $3.5\times$ the 99th percentile ($P_{99} = 0.130244$) of legitimate reconstruction errors. No attack data is used anywhere in threshold selection.
+5. **Window Gate & Persistence Rule:** To eliminate false positives from short sessions and transient spikes, scoring requires a minimum of 10 requests in the trailing 60s window (`MIN_WINDOW_REQUESTS = 10`), and an alert is raised only when **3 consecutive evaluation windows** exceed threshold $\tau$.
 
-We built two versions of this AI:
-- **Dense Autoencoder:** Looks at high-volume statistics (like how many errors were triggered in 60 seconds). Very stable and catches 97% of attacks.
-- **LSTM Autoencoder:** Looks at the exact *sequence* of clicks. Harder to train, but theoretically better at catching sneaky, low-volume attacks.
+We evaluate two architectures:
+- **Dense Autoencoder (Primary & Default):** Evaluates 11 statistical behavioral features over 60-second trailing windows. Latency < 2ms, calibrated threshold $\tau = 0.455855$.
+- **LSTM Autoencoder (Sequential):** Evaluates sequences of 30 endpoint transitions and timing deltas (feature dimension 10, vocabulary size 10, threshold $\tau = 0.316657$).
 
-*(Note: We default to using the highly stable Dense model in this project, which scores 97.24% accuracy).*
+---
+
+## ⚡ Localhost vs 127.0.0.1 DNS Timing Resolution
+During testing on Windows environments, an artificial timing bottleneck was identified when clients targeted `http://localhost:5000`:
+- **`http://localhost:5000`:** Median curl request duration = **0.2393s** (0.222s, 0.237s, 0.239s, 0.247s, 0.248s)
+- **`http://127.0.0.1:5000`:** Median curl request duration = **0.0152s** (0.013s, 0.015s, 0.015s, 0.016s, 0.018s)
+
+### Why BASE_URL was changed to `http://127.0.0.1:5000`
+On Windows, HTTP clients resolving `localhost` first attempt IPv6 `::1` resolution before timing out and falling back to IPv4 `127.0.0.1`. This introduced an artificial 200–240ms network latency per request, which inadvertently capped automated attack scripts to $\approx 2.1\text{s}$ median request gaps and masked true bot speeds. Switching `BASE_URL` to explicit `http://127.0.0.1:5000` yielded a **16× speedup** (0.015s vs 0.239s), allowing automated attacks to burst at realistic sub-second rates (median gap 0.157s) and ensuring training inter-arrival times match live client execution.
+
+---
+
+## 📊 Live Out-of-Sample Verification Results
+
+Three independent out-of-sample live evaluation runs were conducted on brand-new, clean SQLite databases. Each run consisted of **12 concurrent legitimate users** running for **200 seconds**, alongside all **4 fast attacks** and all **3 slow evasive attacks** executing concurrently. Denominators strictly report sessions that reached the 10-request evaluation gate.
+
+### Run 1 (`evaluation_runs/run_1.txt` — 1,332 requests, 45 sessions)
+- Feature Drift: All 11 features $|z| \le 0.41$ (all `OK`)
+- Pacing Diagnostic vs `data_manifest.json`: Median gap diff = **0.3%**, P1 diff = **11.8%**, P95 diff = **5.4%**
+
+| Traffic Profile | Total Sessions | Reached Gate ($\ge 10$ reqs) | Sessions Flagged | Gate Rate | Total Rate |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **Credential Stuffing (Fast)** | 1 | 1 | 1 | **100.0%** | 100.0% |
+| **BOLA / Enumeration (Fast)** | 1 | 1 | 1 | **100.0%** | 100.0% |
+| **Data Scraping (Fast)** | 1 | 1 | 1 | **100.0%** | 100.0% |
+| **Privilege Probe (Fast)** | 1 | 1 | 1 | **100.0%** | 100.0% |
+| **Slow Credential Stuffing (Evasive)** | 1 | 1 | 1 | **100.0%** | 100.0% |
+| **Slow Enumeration (Evasive)** | 1 | 1 | 1 | **100.0%** | 100.0% |
+| **Slow Privilege Probe (Evasive)** | 1 | 1 | 0 | **0.0%** | 0.0% |
+| **Normal Users** | 32 | 31 | 0 | **0.0%** | 0.0% |
+| **Power Users** | 6 | 6 | 0 | **0.0%** | 0.0% |
+
+---
+
+### Run 2 (`evaluation_runs/run_2.txt` — 1,289 requests, 42 sessions)
+- Feature Drift: All 11 features $|z| \le 0.68$ (all `OK`)
+- Pacing Diagnostic vs `data_manifest.json`: Median gap diff = **9.4%**, P1 diff = **9.3%**, P95 diff = **6.1%**
+
+| Traffic Profile | Total Sessions | Reached Gate ($\ge 10$ reqs) | Sessions Flagged | Gate Rate | Total Rate |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **Credential Stuffing (Fast)** | 1 | 1 | 1 | **100.0%** | 100.0% |
+| **BOLA / Enumeration (Fast)** | 1 | 1 | 1 | **100.0%** | 100.0% |
+| **Data Scraping (Fast)** | 1 | 1 | 1 | **100.0%** | 100.0% |
+| **Privilege Probe (Fast)** | 1 | 1 | 1 | **100.0%** | 100.0% |
+| **Slow Credential Stuffing (Evasive)** | 1 | 1 | 1 | **100.0%** | 100.0% |
+| **Slow Enumeration (Evasive)** | 1 | 1 | 1 | **100.0%** | 100.0% |
+| **Slow Privilege Probe (Evasive)** | 1 | 1 | 0 | **0.0%** | 0.0% |
+| **Normal Users** | 27 | 25 | 0 | **0.0%** | 0.0% |
+| **Power Users** | 8 | 8 | 0 | **0.0%** | 0.0% |
+
+---
+
+### Run 3 (`evaluation_runs/run_3.txt` — 1,246 requests, 39 sessions)
+- Feature Drift: All 11 features $|z| \le 0.69$ (all `OK`)
+- Pacing Diagnostic vs `data_manifest.json`: Median gap diff = **11.4%**, P1 diff = **18.0%**, P95 diff = **1.0%**
+
+| Traffic Profile | Total Sessions | Reached Gate ($\ge 10$ reqs) | Sessions Flagged | Gate Rate | Total Rate |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **Credential Stuffing (Fast)** | 1 | 1 | 1 | **100.0%** | 100.0% |
+| **BOLA / Enumeration (Fast)** | 1 | 1 | 1 | **100.0%** | 100.0% |
+| **Data Scraping (Fast)** | 1 | 1 | 1 | **100.0%** | 100.0% |
+| **Privilege Probe (Fast)** | 1 | 1 | 1 | **100.0%** | 100.0% |
+| **Slow Credential Stuffing (Evasive)** | 1 | 1 | 1 | **100.0%** | 100.0% |
+| **Slow Enumeration (Evasive)** | 1 | 1 | 1 | **100.0%** | 100.0% |
+| **Slow Privilege Probe (Evasive)** | 1 | 1 | 0 | **0.0%** | 0.0% |
+| **Normal Users** | 25 | 24 | 0 | **0.0%** | 0.0% |
+| **Power Users** | 7 | 7 | 0 | **0.0%** | 0.0% |
+
+---
+
+### Summary of Live Out-of-Sample Performance
+- **Legitimate Normal Users False Alarm Rate:** **0 / 80 (0.0%)** of gate-reaching sessions across all runs.
+- **Power Users False Alarm Rate:** **0 / 21 (0.0%)** of gate-reaching sessions across all runs.
+- **Combined Legitimate False Alarm Rate:** **0 / 101 (0.0%)**.
+- **Fast Attack Detection Rate:** **12 / 12 (100.0%)** (4/4 on each run).
+- **Slow Attack Detection Rate:** **6 / 9 (66.7%)** (detected slow credential stuffing and slow enumeration in all runs; missed slow privilege probe).
+- **Overall Attack Detection Rate:** **18 / 21 (85.7%)** across all runs.
+
+---
+
+## ⚠️ Limitations & Boundary Conditions
+1. **Simulated Traffic Environment:** All training and evaluation traffic was generated through scripted client simulation profiles rather than real production web user sessions. While profiles incorporate realistic human pacing jitter ($0.5\times - 1.8\times$) and random thinking delays, production real-world traffic will contain higher variance in user-agent headers, network jitter, and session lengths.
+2. **10-Request Window Gate:** The trailing 60s sliding window enforces `MIN_WINDOW_REQUESTS = 10`. Sessions ending before reaching 10 requests (e.g., a visitor who browses 3 products and departs) are never evaluated by the anomaly detector.
+3. **Small Attack Sample Size per Live Run:** In each live run, 1 session of each attack profile is unleashed against 12 concurrent users to model an opportunistic intrusion in ongoing traffic. While this tests real-time alerting sensitivity, statistical variance in attack detection is best evaluated alongside the offline test set (2,483 attack windows).
+4. **Environment-Dependent Timing Features:** Inter-arrival time features (`mean_inter_request_time`, `min_inter_request_time`, `std_inter_request_time`) are influenced by the host machine's CPU speed, operating system scheduler, and network stack. If deploying this codebase to a different server or operating system, traffic generation and feature extraction must be re-run to recalibrate the baseline distribution.
+5. **LSTM Steady-State Scraping Detection:** The LSTM autoencoder evaluates sequential endpoint transition paths. In steady-state scraping where an attacker continuously requests `/api/products/<ID>` in a loop, sequential transition novelty is low; hence LSTM recall on scraping is lower than the Dense Autoencoder. The Dense Autoencoder is therefore designated as the primary detection model.
+6. **Slow Privilege Probe Detection Limit:** In `slow_privilege_probe`, an attacker makes only 4 unauthorized requests across a 26-request session with 3–6s delays. Because requests are widely spaced, a 60-second window contains only 1 error out of 12 requests ($<8\%$ error ratio), which does not persist across 3 consecutive sliding windows. Detecting such ultra-low-frequency attacks requires longer temporal aggregation windows (> 5 minutes).
+7. **Threshold Calibration Strategy:** The decision threshold is mathematically fixed at $\tau = 3.5 \times P_{99}(\text{val\_errors})$ on legitimate-only validation data. While this guarantees zero attack label leakage and absorbs session-level sliding-window variance, it is tuned for high precision to protect legitimate users.
 
 ---
 
 ## 🚀 How to Run the Project Live
 
-To see the system working live, open **4 separate PowerShell terminal windows** at the root of the project (`d:\Project-7th-Sem`).
+Open **4 separate PowerShell terminal windows** at the root of the project directory (`d:\Project-7th-Sem`).
 
-### First Time Setup (One-Time Only)
-Before running anything for the first time, initialize the database and seed it with sample data:
+### One-Time Setup:
 ```powershell
 python init_sqlite.py
 python target-api/seed_db.py
 ```
 
-### Terminal 1: Start the Target Website
-This runs the mock E-Commerce API that users and hackers will interact with.
+### Terminal 1: Start Mock E-Commerce API
 ```powershell
 python target-api/app.py
 ```
 
-### Terminal 2: Start the Security AI (Scoring Engine)
-This starts the backend engine that runs the Machine Learning model on the live traffic.
+### Terminal 2: Start Anomaly Scoring Engine
 ```powershell
 python scoring-engine/main.py
 ```
 
-### Terminal 3: Start the Security Dashboard
-This launches the stunning visual dashboard so you can watch the attacks happen.
+### Terminal 3: Start SOC Dashboard
 ```powershell
 cd dashboard
 npm run dev
 ```
-*(Once started, open `http://localhost:5173` in your browser).*
+*(Open `http://localhost:5173` in your browser to view real-time traffic and alerts).*
 
-### Terminal 4: Launch the Traffic Simulator (The Hackers!)
-This launches a script that generates legitimate human users AND unleashes all four cyber attacks at the exact same time.
+### Terminal 4: Launch Traffic Simulator
+To launch standard mixed traffic with 12 users and all 4 fast attacks:
 ```powershell
-python traffic-simulator/simulator.py --mode mixed --attack all --users 20 --duration 600
+python traffic-simulator/simulator.py --mode mixed --attack all --users 12 --duration 200 --base-url http://127.0.0.1:5000
 ```
-**Look at your browser dashboard (Terminal 3). You will see the normal traffic flowing, and suddenly the AI graphs will spike into the red as it catches the simulated attacks!**
+To run the slow human-paced attacks concurrently:
+```powershell
+python traffic-simulator/profiles/attacks/slow_attacks.py
+```
 
 ---
 
-## 🧠 How to Retrain the Machine Learning Model
-If you ever want to wipe the AI's memory and retrain it from scratch, you can run our automated script. This script will delete the database, generate fresh normal human traffic, simulate fresh attacks, and train both the Dense and LSTM models across 5 random seeds to guarantee statistical accuracy.
+## 🔬 How to Reproduce Training and Evaluation
 
-1. Stop all the terminals above.
-2. Open PowerShell and run:
+### 1. Feature Extraction & Model Training
 ```powershell
 $env:PYTHONUTF8=1
-python run_experiments.py
+python ml-pipeline/features/feature_builder.py
+python ml-pipeline/features/sequence_builder.py
+python ml-pipeline/training/train_dense_ae.py
+python ml-pipeline/training/train_lstm_ae.py
 ```
-This will take a few minutes. When it finishes, it will print out a highly rigorous statistical table showing the Precision, Recall, and AUC (Accuracy) of the newly trained models!
 
+### 2. Model Evaluation on Test Split
+```powershell
+$env:PYTHONUTF8=1
+python ml-pipeline/training/evaluate.py --model dense_ae
+python ml-pipeline/training/evaluate.py --model lstm_ae --threshold-path ml-pipeline/saved_models/lstm_threshold.json
+```
+
+### 3. Out-of-Sample Live Replay Evaluation
+```powershell
+$env:PYTHONUTF8=1
+python run_single_eval.py 1
+python run_single_eval.py 2
+python run_single_eval.py 3
+```
 
 ---
 
-## 📊 Evaluation & Benchmarks (Session-Level Results)
-
-We benchmarked the trained Dense Autoencoder using real-time replay evaluation (`evaluate_live.py`) across all 582 recorded sessions (9,162 requests) under real-world traffic dynamics:
-
-| Traffic Profile | Total Sessions | Sessions Flagged | Detection / False Alarm Rate |
-| :--- | :---: | :---: | :---: |
-| **Credential Stuffing** | 4 | 4 | **100.0%** (Detected) |
-| **BOLA / Enumeration** | 4 | 4 | **100.0%** (Detected) |
-| **Data Scraping** | 4 | 4 | **100.0%** (Detected) |
-| **Privilege Probes** | 4 | 4 | **100.0%** (Detected) |
-| **Normal Users** | 458 | 0 | **0.0%** (No False Alarms) |
-| **Power Users (Busy Legitimate)** | 108 | 0 | **0.0%** (No False Alarms) |
-
-### Key Architectural Safeguards:
-1. **Trailing Window Sampling with 10-Request Gate:**
-   - Both feature generation (`feature_builder.py`) and live scoring (`scoring-engine/main.py`) evaluate trailing 60-second windows ending at requests with `MIN_WINDOW_REQUESTS = 10`.
-   - By including legitimate power-user windows during training, the model understands high-throughput legitimate user behavior and achieves a 0.0% false alarm rate.
-2. **Short-Burst Heuristic Fast Path:**
-   - For short sessions under 10 requests, a fast-path heuristic monitors error concentration ($\ge 3$ consecutive errors with $\ge 75\%$ error rate within $<15$s), detecting rapid brute-force sprays or probes without requiring a full 10-request window.
-3. **Persistence Rule & Raw Audit Logging:**
-   - The engine flags alerts only on the 3rd consecutive anomalous window (with 60s per-session alert cooldowns).
-   - Raw model scores and raw anomaly classifications are preserved in `scored_requests` for complete auditability.
-4. **Dynamic Threshold Loading:**
-   - The SOC dashboard dynamically queries `/api/stats` to adapt to the calibrated model threshold ($	au = 0.648$ for Dense Autoencoder).
+## 📜 Academic Integrity & AI Assistance
+In accordance with academic and institutional project guidelines, AI assistance (Google DeepMind Antigravity / Claude) was utilized for exploratory pair programming, test script automation, and debugging timing discrepancies on Windows network stacks. All architectural decisions, feature engineering, mathematical models, and reported experimental numbers were validated and reproduced through executed code.

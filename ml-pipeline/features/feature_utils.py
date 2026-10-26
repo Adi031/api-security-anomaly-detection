@@ -23,11 +23,8 @@ FEATURE_NAMES = [
     'failed_auth_ratio',
     'error_ratio',
     'method_post_ratio',
-    'avg_response_time',
-    'std_response_time',
     'sequential_id_score',
     'session_duration',
-    'unique_user_agents',
 ]
 
 NUM_FEATURES = len(FEATURE_NAMES)
@@ -193,11 +190,8 @@ def extract_features_from_records(records):
         failed_auth_ratio,
         error_ratio,
         method_post_ratio,
-        avg_response_time,
-        std_response_time,
         sequential_id_score,
         session_duration,
-        unique_user_agents,
     ], dtype=np.float32)
     
     return features

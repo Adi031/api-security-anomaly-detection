@@ -24,7 +24,7 @@ class DenseAutoencoder(nn.Module):
     are reconstructed well (low error); anomalous patterns are not (high error).
     """
     
-    def __init__(self, input_dim=14, encoding_dim=6, dropout=0.2):
+    def __init__(self, input_dim=11, encoding_dim=6, dropout=0.2):
         super(DenseAutoencoder, self).__init__()
         
         self.input_dim = input_dim

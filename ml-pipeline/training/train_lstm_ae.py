@@ -13,9 +13,9 @@ import os
 import random
 import numpy as np
 import torch
-random.seed(999)
-np.random.seed(999)
-torch.manual_seed(999)
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
 import sys
 import argparse
 import torch.nn as nn

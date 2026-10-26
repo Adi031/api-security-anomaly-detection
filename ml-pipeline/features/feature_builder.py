@@ -14,9 +14,9 @@ import os
 import random
 import numpy as np
 import torch
-random.seed(999)
-np.random.seed(999)
-torch.manual_seed(999)
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
 import sys
 import argparse
 import pandas as pd
@@ -170,13 +170,27 @@ def split_and_save(features, metadata, output_dir, train_ratio=0.8, normal_only_
         np.random.shuffle(normal_session_ids)
         
         n_sessions = len(normal_session_ids)
-        n_train_sessions = int(n_sessions * train_ratio)
-        n_val_sessions = int(n_sessions * 0.15)
+        # Allocate sessions aiming for at least 200 validation windows
+        # Target roughly: 65% train, 20% val, 15% test
+        n_val_sessions = max(int(n_sessions * 0.20), 1)
+        n_test_sessions = max(int(n_sessions * 0.15), 1)
+        n_train_sessions = n_sessions - n_val_sessions - n_test_sessions
         
+        # Check window counts and adaptively rebalance if needed so val has >= 200 windows
         train_sessions = set(normal_session_ids[:n_train_sessions])
         val_sessions = set(normal_session_ids[n_train_sessions:n_train_sessions + n_val_sessions])
         test_sessions = set(normal_session_ids[n_train_sessions + n_val_sessions:])
         
+        val_count = sum(1 for m in normal_metadata if m.get('group_id') in val_sessions)
+        target_val = min(200, int(len(normal_metadata) * 0.25))
+        
+        # If val has fewer than target_val windows and train has excess, transfer sessions
+        while val_count < target_val and len(train_sessions) > len(val_sessions):
+            moved_sid = list(train_sessions).pop()
+            train_sessions.remove(moved_sid)
+            val_sessions.add(moved_sid)
+            val_count = sum(1 for m in normal_metadata if m.get('group_id') in val_sessions)
+            
         train_mask = np.array([m.get('group_id') in train_sessions for m in normal_metadata])
         val_mask = np.array([m.get('group_id') in val_sessions for m in normal_metadata])
         test_mask = np.array([m.get('group_id') in test_sessions for m in normal_metadata])
@@ -204,9 +218,28 @@ def split_and_save(features, metadata, output_dir, train_ratio=0.8, normal_only_
     
     # Fit scaler on training data only
     scaler = StandardScaler()
-    train_features_scaled = scaler.fit_transform(train_features)
-    val_features_scaled = scaler.transform(val_features)
-    test_features_scaled = scaler.transform(test_features)
+    scaler.fit(train_features)
+    
+    # Floor the spread so tiny standard deviations cannot explode out-of-sample (Fix #2)
+    # Floor the spread so tiny standard deviations cannot explode out-of-sample
+    scaler.scale_ = np.maximum(scaler.scale_, np.maximum(0.15 * np.abs(scaler.mean_), 0.35))
+    
+    # Specific timing scale floor (>= 1.5s) to allow natural human click pace variance
+    time_indices = [
+        FEATURE_NAMES.index('mean_inter_request_time'),
+        FEATURE_NAMES.index('std_inter_request_time'),
+        FEATURE_NAMES.index('min_inter_request_time'),
+    ]
+    for idx in time_indices:
+        scaler.scale_[idx] = max(scaler.scale_[idx], 1.5)
+        
+    # Request count scale floor (>= 4.0) to accommodate legitimate throughput bursts
+    scaler.scale_[FEATURE_NAMES.index('request_count')] = max(scaler.scale_[FEATURE_NAMES.index('request_count')], 4.0)
+    
+    # Transform and clip z-scores to [-5, 5] in both training and serving
+    train_features_scaled = np.clip(scaler.transform(train_features), -5.0, 5.0)
+    val_features_scaled = np.clip(scaler.transform(val_features), -5.0, 5.0)
+    test_features_scaled = np.clip(scaler.transform(test_features), -5.0, 5.0)
     
     # Save everything
     np.save(os.path.join(output_dir, 'train_features.npy'), train_features_scaled)
@@ -256,7 +289,7 @@ def main():
                         help='Fraction of data for training (default: 0.8)')
     parser.add_argument('--min-requests', type=int, default=int(os.getenv("MIN_WINDOW_REQUESTS", "10")),
                         help='Minimum requests in a window (default: 10)')
-    parser.add_argument('--step', type=int, default=2,
+    parser.add_argument('--step', type=int, default=1,
                         help='Step size between trailing window samples (default: 2)')
     
     args = parser.parse_args()

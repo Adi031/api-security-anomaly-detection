@@ -4,7 +4,7 @@ import os
 from werkzeug.security import generate_password_hash
 
 CATEGORIES = ['electronics', 'clothing', 'books', 'food', 'sports']
-DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'database.sqlite')
+DB_PATH = os.getenv('DB_PATH', os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'database.sqlite'))
 
 def seed_database():
     print(f"Connecting to database at {DB_PATH}...")

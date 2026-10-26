@@ -37,6 +37,7 @@ class NormalUser:
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36"
         ])
         self.ip_address = f"192.168.{random.randint(0, 255)}.{random.randint(1, 254)}"
+        self.pacing = random.uniform(0.5, 1.8)
 
     def _headers(self):
         """Build headers with auth token if available."""
@@ -51,12 +52,11 @@ class NormalUser:
             h['Authorization'] = f'Bearer {self.token}'
         return h
 
-    def _delay(self, min_s=2.0, max_s=8.0):
-        """Human-like delay with slight randomness."""
-        delay = random.uniform(min_s, max_s)
-        # Occasionally pause longer (user is reading/thinking)
+    def _delay(self, min_s=0.8, max_s=4.0):
+        """Human-like delay with realistic spread and natural reading pauses."""
+        delay = random.uniform(min_s, max_s) * self.pacing
         if random.random() < 0.15:
-            delay += random.uniform(3.0, 10.0)
+            delay += random.uniform(2.0, 6.0)
         time.sleep(delay)
 
     def _safe_request(self, method, url, **kwargs):
@@ -82,10 +82,10 @@ class NormalUser:
         return False
 
     def browse_products(self):
-        """Browse product listing pages (1-3 pages)."""
-        num_pages = random.randint(1, 3)
+        """Browse product listing pages (2-4 pages)."""
+        num_pages = random.randint(2, 4)
         for page in range(1, num_pages + 1):
-            self._delay(1.5, 5.0)
+            self._delay(0.8, 3.5)
             resp = self._safe_request('get', f'{self.base_url}/api/products',
                                       params={'page': page, 'per_page': 20})
             if resp and resp.status_code == 200:
@@ -99,12 +99,11 @@ class NormalUser:
                             self.products_viewed.append(pid)
 
     def view_product_details(self):
-        """View details of 2-6 products (not all — realistic browsing)."""
+        """View details of 5-10 products."""
         if not self.products_viewed:
-            # Fallback: pick random product IDs
-            self.products_viewed = random.sample(range(1, 80), random.randint(2, 5))
+            self.products_viewed = random.sample(range(1, 80), random.randint(6, 12))
 
-        num_to_view = min(random.randint(2, 6), len(self.products_viewed))
+        num_to_view = min(random.randint(5, 10), len(self.products_viewed))
         products_to_view = random.sample(self.products_viewed, num_to_view)
 
         for pid in products_to_view:

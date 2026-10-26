@@ -34,6 +34,7 @@ class PowerUser:
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36"
         ])
         self.ip_address = f"192.168.{random.randint(0, 255)}.{random.randint(1, 254)}"
+        self.pacing = random.uniform(0.5, 1.5)
 
     def _headers(self):
         h = {
@@ -49,7 +50,7 @@ class PowerUser:
 
     def _delay(self, min_s=1.0, max_s=4.0):
         """Faster but still human-like delays."""
-        delay = random.uniform(min_s, max_s)
+        delay = random.uniform(min_s, max_s) * self.pacing
         if random.random() < 0.1:
             delay += random.uniform(2.0, 6.0)
         time.sleep(delay)

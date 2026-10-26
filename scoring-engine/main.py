@@ -93,20 +93,11 @@ async def poll_database():
                         
                         full_session_logs.sort(key=lambda x: x['timestamp'])
                         
-                        overall_score = 0.0
-                        raw_overall_severity = "normal"
-                        overall_contributions = {}
-                        
-                        if len(full_session_logs) >= config.MIN_WINDOW_REQUESTS:
-                            features = extract_features(full_session_logs)
-                            overall_score, raw_overall_severity, overall_contributions = scorer.score_features(features)
-                        else:
-                            # Fast-path check for short burst attacks (e.g. failed login spray or rapid probe)
-                            err_logs = [l for l in full_session_logs if l.get('status_code', 200) >= 400]
-                            if len(full_session_logs) >= 3 and len(err_logs) / len(full_session_logs) >= 0.75:
-                                overall_score = scorer.tau * 1.5
-                                raw_overall_severity = "warning"
-                                overall_contributions = {"rapid_error_burst": 1.0}
+                        if len(full_session_logs) < config.MIN_WINDOW_REQUESTS:
+                            continue
+                            
+                        features = extract_features(full_session_logs)
+                        overall_score, raw_overall_severity, overall_contributions = scorer.score_features(features)
                         
                         if raw_overall_severity != "normal":
                             session_flags[sid] = session_flags.get(sid, 0) + 1
@@ -126,11 +117,6 @@ async def poll_database():
                             if len(trailing_reqs) >= config.MIN_WINDOW_REQUESTS:
                                 req_feats = extract_features(trailing_reqs)
                                 req_score, raw_req_sev, _ = scorer.score_features(req_feats)
-                            elif len(trailing_reqs) >= 3:
-                                err_count = sum(1 for r in trailing_reqs if r.get('status_code', 200) >= 400)
-                                if err_count / len(trailing_reqs) >= 0.75:
-                                    req_score = scorer.tau * 1.5
-                                    raw_req_sev = "warning"
                             
                             # Store raw model severity to preserve raw decisions in DB
                             global_scored_batch.append((log['id'], req_score, raw_req_sev))

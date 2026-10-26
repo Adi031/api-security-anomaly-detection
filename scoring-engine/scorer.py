@@ -27,14 +27,14 @@ class ModelScorer:
                 
         if os.path.exists(config.MODEL_PATH):
             try:
+                checkpoint = torch.load(config.MODEL_PATH, map_location=torch.device('cpu'), weights_only=False)
                 if config.MODEL_TYPE == "dense":
                     from models.dense_autoencoder import DenseAutoencoder
-                    self.model = DenseAutoencoder(input_dim=14, encoding_dim=6)
+                    input_dim = checkpoint.get('input_dim', 11)
+                    self.model = DenseAutoencoder(input_dim=input_dim, encoding_dim=6)
                 else:
                     from models.lstm_autoencoder import LSTMAutoencoder
                     self.model = LSTMAutoencoder(vocab_size=len(self.vocab), seq_len=30, input_dim=10)
-                    
-                checkpoint = torch.load(config.MODEL_PATH, map_location=torch.device('cpu'), weights_only=False)
                 self.model.load_state_dict(checkpoint['model_state_dict'])
                 self.model.eval()
             except Exception as e:
@@ -61,6 +61,7 @@ class ModelScorer:
         try:
             if config.MODEL_TYPE == "dense":
                 scaled_features = self.scaler.transform(features.reshape(1, -1))
+                scaled_features = np.clip(scaled_features, -5.0, 5.0)
                 tensor_features = torch.tensor(scaled_features, dtype=torch.float32)
                 
                 with torch.no_grad():

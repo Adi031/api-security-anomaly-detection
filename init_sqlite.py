@@ -1,8 +1,9 @@
 import sqlite3
 import os
 
-def init_db():
-    db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'database.sqlite')
+def init_db(db_path=None):
+    if db_path is None:
+        db_path = os.getenv('DB_PATH', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'database.sqlite'))
     print(f"Initializing SQLite database at: {db_path}")
     
     conn = sqlite3.connect(db_path)

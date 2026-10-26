@@ -2,7 +2,7 @@ import aiosqlite
 import json
 import os
 
-DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'database.sqlite')
+DB_PATH = os.getenv('DB_PATH', os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'database.sqlite'))
 
 class Database:
     def __init__(self):

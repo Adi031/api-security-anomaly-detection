@@ -1,12 +1,13 @@
 {
-  "threshold": 0.814948558807373,
-  "method": "percentile-99.0",
+  "threshold": 0.45585494488477707,
+  "method": null,
   "stats": {
-    "method": "percentile-99.0",
-    "percentile": 99.0,
-    "threshold": 0.814948558807373,
-    "bounded_fpr": 0.01,
-    "normal_max": 0.8481612801551819,
-    "normal_min": 0.047240834683179855
+    "rule": "3.5 x validation P99 (legitimate-only)",
+    "method": "session-headroom-p99",
+    "raw_p99": 0.13024426996707916,
+    "headroom_multiplier": 3.5,
+    "threshold": 0.45585494488477707,
+    "normal_max": 0.26953500509262085,
+    "normal_mean": 0.04049616679549217
   }
 }

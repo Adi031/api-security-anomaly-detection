@@ -14,9 +14,9 @@ import os
 import random
 import numpy as np
 import torch
-random.seed(999)
-np.random.seed(999)
-torch.manual_seed(999)
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
 import sys
 import argparse
 import torch.nn as nn
@@ -319,8 +319,20 @@ def main():
         normal_test_errors = test_errors[test_labels == 0]
         attack_test_errors = test_errors[test_labels == 1]
         
-        # Use 99th percentile on validation data
-        threshold_selector.fit_percentile(val_errors, 99.0)
+        # Compute threshold strictly from validation (legitimate-only) errors: exactly 3.5 x P99
+        raw_p99 = float(np.percentile(val_errors, 99.0))
+        calibrated_threshold = float(raw_p99 * 3.5)
+            
+        threshold_selector.threshold = calibrated_threshold
+        threshold_selector.stats = {
+            'rule': '3.5 x validation P99 (legitimate-only)',
+            'method': 'session-headroom-p99',
+            'raw_p99': raw_p99,
+            'headroom_multiplier': 3.5,
+            'threshold': calibrated_threshold,
+            'normal_max': float(val_errors.max()),
+            'normal_mean': float(val_errors.mean())
+        }
         
         # Also compute comparison
         print("\n  Threshold comparison:")
@@ -335,8 +347,19 @@ def main():
             os.path.join(args.save_dir, 'error_distribution.png')
         )
     else:
-        # No labeled data — use 99th percentile
-        threshold_selector.fit_percentile(val_errors, 99.0)
+        # Strictly 3.5 x P99 of validation (legitimate-only) errors
+        raw_p99 = float(np.percentile(val_errors, 99.0))
+        calibrated_threshold = float(raw_p99 * 3.5)
+        threshold_selector.threshold = calibrated_threshold
+        threshold_selector.stats = {
+            'rule': '3.5 x validation P99 (legitimate-only)',
+            'method': 'session-headroom-p99',
+            'raw_p99': raw_p99,
+            'headroom_multiplier': 3.5,
+            'threshold': calibrated_threshold,
+            'normal_max': float(val_errors.max()),
+            'normal_mean': float(val_errors.mean())
+        }
     
     threshold_selector.summary()
     threshold_selector.save(os.path.join(args.save_dir, 'threshold.json'))
