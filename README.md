@@ -188,5 +188,3 @@ python run_single_eval.py 3
 
 ---
 
-## 📜 Academic Integrity & AI Assistance
-In accordance with academic and institutional project guidelines, AI assistance (Google DeepMind Antigravity and Anthropic Claude) was utilized for exploratory pair programming, debugging the Windows IPv6 localhost DNS socket delay, refactoring trailing-window feature extraction, and developing test automation harnesses (`run_single_eval.py`). All core architectural choices, feature definitions, model training, evaluation executions, and reported experimental numbers were performed, verified, and validated on local hardware.
