@@ -33,7 +33,7 @@ The project is divided into 5 completely decoupled microservices.
 * **Purpose**: To convert raw database logs into mathematical features and train the Autoencoder.
 * **How it works**:
   1. **Feature Engineering**: Raw logs are grouped by `session_id`. We calculate statistical features like `request_count`, `mean_inter_request_time` (time between clicks), and `failed_auth_ratio`.
-  2. **Training**: The `DenseAutoencoder` (a deep neural network) compresses these 14 features into a tiny bottleneck of just 6 numbers, then tries to reconstruct the original 14 features. 
+  2. **Training**: The `DenseAutoencoder` (a deep neural network) compresses these 11 behavioral features into a tiny bottleneck of just 6 numbers, then tries to reconstruct the original 11 features. 
   3. **Threshold Calculation**: After training on normal data, we calculate the 99th percentile of the reconstruction error. We save this threshold (`τ`); anything with an error higher than this is officially flagged as an attack.
 
 ### D. The Scoring Engine (`scoring-engine/`)
