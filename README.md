@@ -23,12 +23,12 @@ The pipeline employs an **Autoencoder** neural network trained exclusively on le
 1. **Feature Extraction:** Over trailing 60-second windows ending at every request, traffic is summarized into **11 behavioral features** capturing request velocity, inter-arrival timing dynamics, endpoint diversity, HTTP POST ratios, sequential ID probing, and error/authentication failure proportions.
 2. **Reconstruction Loss:** The autoencoder compresses the 11-dimensional feature vector into a lower-dimensional latent representation (dim=6) and attempts to reconstruct it.
 3. **Anomaly Scoring:** Legitimate sessions reconstruct with low Mean Squared Error (MSE), whereas attack behaviors produce high reconstruction errors.
-4. **Calibrated Threshold ($\tau = 0.455855$) with Zero Attack Leakage:** The threshold is calibrated strictly on validation data as $3.5\times$ the 99th percentile ($P_{99} = 0.130244$) of legitimate reconstruction errors. No attack data is used anywhere in threshold selection.
+4. **Calibrated Threshold ($\tau = 0.383502$) with Zero Attack Leakage:** The threshold is calibrated strictly on validation data as $3.5\times$ the 99th percentile ($P_{99} = 0.109572$) of legitimate reconstruction errors. No attack data is used anywhere in threshold selection.
 5. **Window Gate & Persistence Rule:** To eliminate false positives from short sessions and transient spikes, scoring requires a minimum of 10 requests in the trailing 60s window (`MIN_WINDOW_REQUESTS = 10`), and an alert is raised only when **3 consecutive evaluation windows** exceed threshold $\tau$.
 
 We evaluate two architectures:
-- **Dense Autoencoder (Primary & Default Live Detector):** Evaluates 11 statistical behavioral features over 60-second trailing windows. Latency < 2ms. The threshold is calibrated at **$3.5\times P_{99}$** of validation (legitimate-only) errors ($\tau = 0.455855$) with session headroom. This model serves live traffic in the real-time scoring engine.
-- **LSTM Autoencoder (Sequential Benchmark):** Evaluates sequences of 30 endpoint transitions and timing deltas (feature dimension 10, vocabulary size 10). The threshold uses a **plain $P_{99}$ with no headroom** ($\tau = 0.316657$). Note that the Dense model is the default, and the LSTM was evaluated on offline sequence splits and **not tested as the live detector** in the real-time scoring engine.
+- **Dense Autoencoder (Primary & Default Live Detector):** Evaluates 11 statistical behavioral features over 60-second trailing windows. Latency < 2ms. The threshold is calibrated at **$3.5\times P_{99}$** of validation (legitimate-only) errors ($\tau = 0.383502$) with session headroom. This model serves live traffic in the real-time scoring engine.
+- **LSTM Autoencoder (Sequential Benchmark):** Evaluates sequences of 30 endpoint transitions and timing deltas (feature dimension 10, vocabulary size 9). The threshold uses a **plain $P_{99}$ with no headroom** ($\tau = 0.305701$). Note that the Dense model is the default, and the LSTM was evaluated on offline sequence splits and **not tested as the live detector** in the real-time scoring engine.
 
 ---
 
@@ -38,7 +38,7 @@ During testing on Windows environments, an artificial timing bottleneck was iden
 - **`http://127.0.0.1:5000`:** Median curl request duration = **0.0152s** (0.013s, 0.015s, 0.015s, 0.016s, 0.018s)
 
 ### Why BASE_URL was changed to `http://127.0.0.1:5000`
-On Windows, HTTP clients resolving `localhost` first attempt IPv6 `::1` resolution before timing out and falling back to IPv4 `127.0.0.1`. The measured delay was **about 0.22 s with curl, about 2 s for the Python client on this machine** (due to socket/DNS resolution overhead accumulating across connection pooling). This inadvertently capped automated attack scripts in the simulator to $\approx 2.07\text{s}$ inter-request gaps, masking true bot burst velocities. Switching `BASE_URL` to explicit `http://127.0.0.1:5000` eliminated this DNS bottleneck completely (0.015s vs 0.239s in curl), allowing automated attacks to burst at realistic sub-second rates (median gap 0.157s) and ensuring training inter-arrival times match live client execution.
+On Windows, HTTP clients resolving `localhost` first attempt IPv6 `::1` resolution before timing out and falling back to IPv4 `127.0.0.1`. The measured delay was **about 0.22 s with curl, about 2 s for the Python client on this machine** (due to socket/DNS resolution overhead accumulating across connection pooling). This inadvertently capped automated attack scripts in the simulator to $\approx 2.07\text{s}$ inter-request gaps, masking true bot burst velocities. Switching `BASE_URL` to explicit `http://127.0.0.1:5000` eliminated this DNS bottleneck completely (0.015s vs 0.239s in curl), allowing automated attacks to burst at realistic sub-second rates (median gap 0.177s) and ensuring training inter-arrival times match live client execution.
 
 ---
 
@@ -46,9 +46,9 @@ On Windows, HTTP clients resolving `localhost` first attempt IPv6 `::1` resoluti
 
 Three independent out-of-sample live evaluation runs were conducted on brand-new, clean SQLite databases. Each run consisted of **12 concurrent legitimate users** running for **200 seconds**, alongside all **4 fast attacks** and all **3 slow evasive attacks** executing concurrently. Denominators strictly report sessions that reached the 10-request evaluation gate.
 
-### Run 1 (`evaluation_runs/run_1.txt` — 1,332 requests, 45 sessions)
-- Feature Drift: All 11 features $|z| \le 0.41$ (all `OK`)
-- Pacing Diagnostic vs `data_manifest.json`: Median gap diff = **0.3%**, P1 diff = **11.8%**, P95 diff = **5.4%**
+### Run 1 (`evaluation_runs/run_1.txt` — 1,349 requests, 47 sessions)
+- Feature Drift: All 11 features $|z| \le 0.38$ (all `OK`)
+- Pacing Diagnostic vs `data_manifest.json`: Median gap diff = **6.9%**, P1 diff = **0.0%**, P95 diff = **1.7%**
 
 | Traffic Profile | Total Sessions | Reached Gate ($\ge 10$ reqs) | Sessions Flagged | Gate Rate | Total Rate |
 | :--- | :---: | :---: | :---: | :---: | :---: |
@@ -59,14 +59,14 @@ Three independent out-of-sample live evaluation runs were conducted on brand-new
 | **Slow Credential Stuffing (Evasive)** | 1 | 1 | 1 | **100.0%** | 100.0% |
 | **Slow Enumeration (Evasive)** | 1 | 1 | 1 | **100.0%** | 100.0% |
 | **Slow Privilege Probe (Evasive)** | 1 | 1 | 0 | **0.0%** | 0.0% |
-| **Normal Users** | 32 | 31 | 0 | **0.0%** | 0.0% |
+| **Normal Users** | 34 | 33 | 0 | **0.0%** | 0.0% |
 | **Power Users** | 6 | 6 | 0 | **0.0%** | 0.0% |
 
 ---
 
-### Run 2 (`evaluation_runs/run_2.txt` — 1,289 requests, 42 sessions)
-- Feature Drift: All 11 features $|z| \le 0.68$ (all `OK`)
-- Pacing Diagnostic vs `data_manifest.json`: Median gap diff = **9.4%**, P1 diff = **9.3%**, P95 diff = **6.1%**
+### Run 2 (`evaluation_runs/run_2.txt` — 1,286 requests, 43 sessions)
+- Feature Drift: All 11 features $|z| \le 0.45$ (all `OK`)
+- Pacing Diagnostic vs `data_manifest.json`: Median gap diff = **6.9%**, P1 diff = **20.5%**, P95 diff = **3.3%**
 
 | Traffic Profile | Total Sessions | Reached Gate ($\ge 10$ reqs) | Sessions Flagged | Gate Rate | Total Rate |
 | :--- | :---: | :---: | :---: | :---: | :---: |
@@ -77,14 +77,14 @@ Three independent out-of-sample live evaluation runs were conducted on brand-new
 | **Slow Credential Stuffing (Evasive)** | 1 | 1 | 1 | **100.0%** | 100.0% |
 | **Slow Enumeration (Evasive)** | 1 | 1 | 1 | **100.0%** | 100.0% |
 | **Slow Privilege Probe (Evasive)** | 1 | 1 | 0 | **0.0%** | 0.0% |
-| **Normal Users** | 27 | 25 | 0 | **0.0%** | 0.0% |
-| **Power Users** | 8 | 8 | 0 | **0.0%** | 0.0% |
+| **Normal Users** | 31 | 30 | 0 | **0.0%** | 0.0% |
+| **Power Users** | 5 | 5 | 0 | **0.0%** | 0.0% |
 
 ---
 
-### Run 3 (`evaluation_runs/run_3.txt` — 1,246 requests, 39 sessions)
-- Feature Drift: All 11 features $|z| \le 0.69$ (all `OK`)
-- Pacing Diagnostic vs `data_manifest.json`: Median gap diff = **11.4%**, P1 diff = **18.0%**, P95 diff = **1.0%**
+### Run 3 (`evaluation_runs/run_3.txt` — 1,189 requests, 35 sessions)
+- Feature Drift: All 11 features $|z| \le 0.34$ (all `OK`)
+- Pacing Diagnostic vs `data_manifest.json`: Median gap diff = **3.1%**, P1 diff = **21.6%**, P95 diff = **6.4%**
 
 | Traffic Profile | Total Sessions | Reached Gate ($\ge 10$ reqs) | Sessions Flagged | Gate Rate | Total Rate |
 | :--- | :---: | :---: | :---: | :---: | :---: |
@@ -95,17 +95,17 @@ Three independent out-of-sample live evaluation runs were conducted on brand-new
 | **Slow Credential Stuffing (Evasive)** | 1 | 1 | 1 | **100.0%** | 100.0% |
 | **Slow Enumeration (Evasive)** | 1 | 1 | 1 | **100.0%** | 100.0% |
 | **Slow Privilege Probe (Evasive)** | 1 | 1 | 0 | **0.0%** | 0.0% |
-| **Normal Users** | 25 | 24 | 0 | **0.0%** | 0.0% |
-| **Power Users** | 7 | 7 | 0 | **0.0%** | 0.0% |
+| **Normal Users** | 22 | 21 | 0 | **0.0%** | 0.0% |
+| **Power Users** | 6 | 6 | 0 | **0.0%** | 0.0% |
 
 ---
 
 ### Summary of Live Out-of-Sample Performance
-- **Legitimate Normal Users False Alarm Rate:** **0 / 80 (0.0%)** of gate-reaching sessions across all runs.
-- **Power Users False Alarm Rate:** **0 / 21 (0.0%)** of gate-reaching sessions across all runs.
+- **Legitimate Normal Users False Alarm Rate:** **0 / 84 (0.0%)** of gate-reaching sessions across all runs.
+- **Power Users False Alarm Rate:** **0 / 17 (0.0%)** of gate-reaching sessions across all runs.
 - **Combined Legitimate False Alarm Rate:** **0 / 101 (0.0%)**.
 - **Fast Attack Detection Rate:** **12 / 12 (100.0%)** (4/4 on each run).
-- **Slow Attack Detection Rate:** **2 of 3 slow attack types detected** (6 / 9 sessions flagged; caught slow credential stuffing and slow enumeration in all runs, but missed slow privilege probe: 0 / 4 caught across runs).
+- **Slow Attack Detection Rate:** **2 of 3 slow attack types detected** (6 / 9 sessions flagged; caught slow credential stuffing and slow enumeration in all runs, but missed slow privilege probe: 0 / 3 caught across runs).
 - **Overall Attack Detection Rate:** **6 of 7 attack types detected** (18 / 21 session-level alerts across all runs).
 
 ---
@@ -113,10 +113,10 @@ Three independent out-of-sample live evaluation runs were conducted on brand-new
 ## ⚠️ Limitations & Boundary Conditions
 1. **Simulated Traffic Environment:** All training and evaluation traffic was generated through scripted client simulation profiles rather than real production web user sessions. While profiles incorporate realistic human pacing jitter ($0.5\times - 1.8\times$) and random thinking delays, production real-world traffic will contain higher variance in user-agent headers, network jitter, and session lengths.
 2. **10-Request Window Gate:** The trailing 60s sliding window enforces `MIN_WINDOW_REQUESTS = 10`. Sessions ending before reaching 10 requests (e.g., a visitor who browses 3 products and departs) are never evaluated by the anomaly detector.
-3. **Small Attack Sample Size per Live Run:** In each live run, 1 session of each attack profile is unleashed against 12 concurrent users to model an opportunistic intrusion in ongoing traffic. While this tests real-time alerting sensitivity, statistical variance in attack detection is best evaluated alongside the offline test set (2,483 attack windows).
+3. **Small Attack Sample Size per Live Run:** In each live run, 1 session of each attack profile is unleashed against 12 concurrent users to model an opportunistic intrusion in ongoing traffic. While this tests real-time alerting sensitivity, statistical variance in attack detection is best evaluated alongside the offline test set (2,568 attack windows).
 4. **Environment-Dependent Timing Features:** Inter-arrival time features (`mean_inter_request_time`, `min_inter_request_time`, `std_inter_request_time`) are influenced by the host machine's CPU speed, operating system scheduler, and network stack. If deploying this codebase to a different server or operating system, traffic generation and feature extraction must be re-run to recalibrate the baseline distribution.
-5. **LSTM Detector Scope & Steady-State Scraping:** The LSTM autoencoder evaluates sequential endpoint transition paths. In steady-state scraping where an attacker continuously requests `/api/products/<ID>` in a loop, sequential transition novelty is low. Furthermore, the LSTM threshold rule is a plain $P_{99}$ with no headroom ($\tau = 0.316657$), unlike the Dense model's $3.5\times P_{99}$ headroom calibration ($\tau = 0.455855$). The Dense Autoencoder is designated as the primary default detector; the LSTM was evaluated offline on sequence splits and was not tested as the live detector in the live scoring engine.
-6. **Slow Privilege Probe Detection Limit:** In `slow_privilege_probe`, an attacker makes only 4 unauthorized requests across a 26-request session with 3–6s delays (0 of 4 caught across runs). Because requests are widely spaced, a 60-second window contains only 1 error out of 12 requests ($<8\%$ error ratio), which does not persist across 3 consecutive sliding windows. Detecting such ultra-low-frequency attacks requires longer temporal aggregation windows (> 5 minutes).
+5. **LSTM Detector Scope & Steady-State Scraping:** The LSTM autoencoder evaluates sequential endpoint transition paths. In steady-state scraping where an attacker continuously requests `/api/products/<ID>` in a loop, sequential transition novelty is low. Furthermore, the LSTM threshold rule is a plain $P_{99}$ with no headroom ($\tau = 0.305701$), unlike the Dense model's $3.5\times P_{99}$ headroom calibration ($\tau = 0.383502$). The Dense Autoencoder is designated as the primary default detector; the LSTM was evaluated offline on sequence splits and was not tested as the live detector in the live scoring engine.
+6. **Slow Privilege Probe Detection Limit:** In `slow_privilege_probe`, an attacker makes only 4 unauthorized requests across a 26-request session with 3–6s delays (0 of 3 caught across runs). Because requests are widely spaced, a 60-second window contains only 1 error out of 12 requests ($<8\%$ error ratio), which does not persist across 3 consecutive sliding windows. Detecting such ultra-low-frequency attacks requires longer temporal aggregation windows (> 5 minutes).
 7. **Threshold Calibration Strategy:** The decision threshold is mathematically fixed at $\tau = 3.5 \times P_{99}(\text{val\_errors})$ on legitimate-only validation data. While this guarantees zero attack label leakage and absorbs session-level sliding-window variance, it is tuned for high precision to protect legitimate users.
 
 ---
