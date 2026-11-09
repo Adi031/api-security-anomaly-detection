@@ -1,13 +1,13 @@
 {
-  "threshold": 0.3835017681121826,
+  "threshold": 0.41954588517546654,
   "method": null,
   "stats": {
     "rule": "3.5 x validation P99 (legitimate-only)",
     "method": "session-headroom-p99",
-    "raw_p99": 0.10957193374633789,
+    "raw_p99": 0.11987025290727615,
     "headroom_multiplier": 3.5,
-    "threshold": 0.3835017681121826,
-    "normal_max": 0.23148179054260254,
-    "normal_mean": 0.03201920539140701
+    "threshold": 0.41954588517546654,
+    "normal_max": 0.18948063254356384,
+    "normal_mean": 0.03127770498394966
   }
 }

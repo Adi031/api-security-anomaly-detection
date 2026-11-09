@@ -97,7 +97,7 @@ def build_feature_matrix(df, window_seconds=60, stride_seconds=30, group_by='ses
         metadata: list of dicts with window info (group_id, start_time, end_time)
     """
     df = df.copy()
-    df['timestamp'] = pd.to_datetime(df['timestamp'])
+    df['timestamp'] = pd.to_datetime(df['timestamp'], format='mixed', utc=True)
     
     if min_requests is None:
         min_requests = int(os.getenv("MIN_WINDOW_REQUESTS", "10"))

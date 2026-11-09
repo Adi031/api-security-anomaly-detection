@@ -23,12 +23,12 @@ The pipeline employs an **Autoencoder** neural network trained exclusively on le
 1. **Feature Extraction:** Over trailing 60-second windows ending at every request, traffic is summarized into **11 behavioral features** capturing request velocity, inter-arrival timing dynamics, endpoint diversity, HTTP POST ratios, sequential ID probing, and error/authentication failure proportions.
 2. **Reconstruction Loss:** The autoencoder compresses the 11-dimensional feature vector into a lower-dimensional latent representation (dim=6) and attempts to reconstruct it.
 3. **Anomaly Scoring:** Legitimate sessions reconstruct with low Mean Squared Error (MSE), whereas attack behaviors produce high reconstruction errors.
-4. **Calibrated Threshold ($\tau = 0.383502$) with Zero Attack Leakage:** The threshold is calibrated strictly on validation data as $3.5\times$ the 99th percentile ($P_{99} = 0.109572$) of legitimate reconstruction errors. No attack data is used anywhere in threshold selection.
-5. **Window Gate & Persistence Rule:** To eliminate false positives from short sessions and transient spikes, scoring requires a minimum of 10 requests in the trailing 60s window (`MIN_WINDOW_REQUESTS = 10`), and an alert is raised only when **3 consecutive evaluation windows** exceed threshold $\tau$.
+4. **Calibrated Threshold ($\tau = 0.419546$) with Zero Attack Leakage:** The threshold is calibrated strictly on legitimate validation data as $3.5\times$ the 99th percentile ($P_{99} = 0.119870$) of normal reconstruction errors ($\tau = 3.5 \times P_{99} = 0.419546$). No attack data is used in threshold selection.
+5. **Window Gate & Persistence Rule:** To maintain a target False Positive Rate (FPR $\le 5\%$) and filter transient spikes, scoring requires a minimum of 10 requests in the trailing 60s window (`MIN_WINDOW_REQUESTS = 10`), and an alert is raised only when **3 consecutive evaluation windows** exceed threshold $\tau$.
 
 We evaluate two architectures:
-- **Dense Autoencoder (Primary & Default Live Detector):** Evaluates 11 statistical behavioral features over 60-second trailing windows. Latency < 2ms. The threshold is calibrated at **$3.5\times P_{99}$** of validation (legitimate-only) errors ($\tau = 0.383502$) with session headroom. This model serves live traffic in the real-time scoring engine.
-- **LSTM Autoencoder (Sequential Benchmark):** Evaluates sequences of 30 endpoint transitions and timing deltas (feature dimension 10, vocabulary size 9). The threshold uses a **plain $P_{99}$ with no headroom** ($\tau = 0.305701$). Note that the Dense model is the default, and the LSTM was evaluated on offline sequence splits and **not tested as the live detector** in the real-time scoring engine.
+- **Dense Autoencoder (Primary & Default Live Detector):** Evaluates 11 statistical behavioral features over 60-second trailing windows. Designed for low-latency deployment (target model inference latency $< 15\text{ ms}$, measured $< 0.01\text{ ms}$ on CPU; pipeline detection $< 50\text{ ms}$). The threshold is calibrated at **$3.5\times P_{99}$** of validation (legitimate-only) errors ($\tau = 0.419546$) with session headroom. This model serves live traffic in the real-time scoring engine.
+- **LSTM Autoencoder (Sequential Benchmark):** Evaluates sequences of 30 endpoint transitions and timing deltas (feature dimension 10, vocabulary size 10). The threshold uses a **plain $P_{99}$ with no headroom** ($\tau = 0.194286$). Note that the Dense model is the default, and the LSTM was evaluated on offline sequence splits and **not tested as the live detector** in the real-time scoring engine.
 
 ---
 
@@ -103,10 +103,30 @@ Three independent out-of-sample live evaluation runs were conducted on brand-new
 ### Summary of Live Out-of-Sample Performance
 - **Legitimate Normal Users False Alarm Rate:** **0 / 84 (0.0%)** of gate-reaching sessions across all runs.
 - **Power Users False Alarm Rate:** **0 / 17 (0.0%)** of gate-reaching sessions across all runs.
-- **Combined Legitimate False Alarm Rate:** **0 / 101 (0.0%)**.
+- **Combined Legitimate False Alarm Rate:** **0 / 101 (0.0%)** (target FPR: $\le 5.0\%$).
 - **Fast Attack Detection Rate:** **12 / 12 (100.0%)** (4/4 on each run).
 - **Slow Attack Detection Rate:** **2 of 3 slow attack types detected** (6 / 9 sessions flagged; caught slow credential stuffing and slow enumeration in all runs, but missed slow privilege probe: 0 / 3 caught across runs).
 - **Overall Attack Detection Rate:** **6 of 7 attack types detected** (18 / 21 session-level alerts across all runs).
+
+---
+
+## 📈 Baseline Models Benchmark & Comparison
+
+To validate the deep learning architecture against industry and classical alternatives, we benchmarked the **Dense Autoencoder (Sentinel-v2)** against three baseline methods on the exact same held-out test dataset (**9,414 evaluation sessions**: 758 legitimate, 8,656 attacks). All unsupervised models were trained strictly on legitimate normal sessions.
+
+| Model | Model Type | Precision | Recall | F1-Score | False Positive Rate (FPR) | ROC-AUC | Latency (CPU) |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Static Rate Limiter** | Heuristic Rules | 97.71% | 97.12% | 97.42% | 25.99% | 0.9849 | < 0.01 ms |
+| **Isolation Forest** | Tree-based ML | 99.61% | 99.33% | 99.47% | 4.49% | 0.9984 | < 0.01 ms |
+| **One-Class SVM** | Kernel ML | 99.57% | 99.53% | 99.55% | 4.88% | 0.9985 | 0.01 ms |
+| **Dense Autoencoder (Ours)** | **Deep Learning** | **100.00%** | **96.53%** | **98.24%** | **0.00%** | **0.9994** | **< 0.01 ms** |
+
+*Benchmark Data Reference:* [`ml-pipeline/saved_models/evaluation/baseline_comparison.json`](ml-pipeline/saved_models/evaluation/baseline_comparison.json)
+
+*Key Findings:*
+1. **Rate Limiting Deficiencies:** The heuristic baseline suffers from an unacceptable **25.99% False Positive Rate**, as natural browsing bursts exceed static thresholds.
+2. **False Positive Control:** While Isolation Forest (4.49% FPR) and One-Class SVM (4.88% FPR) meet the target requirement ($\le 5\%$ FPR), the Dense Autoencoder achieved the highest separability (**ROC-AUC: 0.9994**) with **0.00% False Positive Rate** on the held-out normal split at operating threshold $\tau = 0.419546$.
+3. **Latency Compliance:** All algorithms execute in **$< 0.01\text{ ms}$** per session on CPU, comfortably satisfying the $< 15\text{ ms}$ real-time inference requirement.
 
 ---
 
@@ -115,9 +135,10 @@ Three independent out-of-sample live evaluation runs were conducted on brand-new
 2. **10-Request Window Gate:** The trailing 60s sliding window enforces `MIN_WINDOW_REQUESTS = 10`. Sessions ending before reaching 10 requests (e.g., a visitor who browses 3 products and departs) are never evaluated by the anomaly detector.
 3. **Small Attack Sample Size per Live Run:** In each live run, 1 session of each attack profile is unleashed against 12 concurrent users to model an opportunistic intrusion in ongoing traffic. While this tests real-time alerting sensitivity, statistical variance in attack detection is best evaluated alongside the offline test set (2,568 attack windows).
 4. **Environment-Dependent Timing Features:** Inter-arrival time features (`mean_inter_request_time`, `min_inter_request_time`, `std_inter_request_time`) are influenced by the host machine's CPU speed, operating system scheduler, and network stack. If deploying this codebase to a different server or operating system, traffic generation and feature extraction must be re-run to recalibrate the baseline distribution.
-5. **LSTM Detector Scope & Steady-State Scraping:** The LSTM autoencoder evaluates sequential endpoint transition paths. In steady-state scraping where an attacker continuously requests `/api/products/<ID>` in a loop, sequential transition novelty is low. Furthermore, the LSTM threshold rule is a plain $P_{99}$ with no headroom ($\tau = 0.305701$), unlike the Dense model's $3.5\times P_{99}$ headroom calibration ($\tau = 0.383502$). The Dense Autoencoder is designated as the primary default detector; the LSTM was evaluated offline on sequence splits and was not tested as the live detector in the live scoring engine.
+5. **LSTM Detector Scope & Steady-State Scraping:** The LSTM autoencoder evaluates sequential endpoint transition paths. In steady-state scraping where an attacker continuously requests `/api/products/<ID>` in a loop, sequential transition novelty is low. Furthermore, the LSTM threshold rule is a plain $P_{99}$ with no headroom ($\tau = 0.194286$), unlike the Dense model's $3.5\times P_{99}$ headroom calibration ($\tau = 0.419546$). The Dense Autoencoder is designated as the primary default detector; the LSTM was evaluated offline on sequence splits and was not tested as the live detector in the live scoring engine.
 6. **Slow Privilege Probe Detection Limit:** In `slow_privilege_probe`, an attacker makes only 4 unauthorized requests across a 26-request session with 3–6s delays (0 of 3 caught across runs). Because requests are widely spaced, a 60-second window contains only 1 error out of 12 requests ($<8\%$ error ratio), which does not persist across 3 consecutive sliding windows. Detecting such ultra-low-frequency attacks requires longer temporal aggregation windows (> 5 minutes).
-7. **Threshold Calibration Strategy:** The decision threshold is mathematically fixed at $\tau = 3.5 \times P_{99}(\text{val\_errors})$ on legitimate-only validation data. While this guarantees zero attack label leakage and absorbs session-level sliding-window variance, it is tuned for high precision to protect legitimate users.
+7. **Threshold Calibration Strategy:** The decision threshold is mathematically fixed at $\tau = 3.5 \times P_{99}(\text{val\_errors}) = 0.419546$ on legitimate-only validation data. While this guarantees zero attack label leakage and absorbs session-level sliding-window variance, it is tuned for high precision to protect legitimate users.
+8. **Session-Rotating & Distributed Evasion:** The current system is explicitly architected as a session-behavioral detector. Attacks that rotate IP addresses and discard session identifiers on every single HTTP request deliberately avoid session accumulation. Mitigating such attacks requires multi-session cross-account and IP-subnet rolling aggregation, which is documented as planned future work.
 
 ---
 

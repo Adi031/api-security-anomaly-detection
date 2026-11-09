@@ -1,0 +1,42 @@
+[
+  {
+    "model": "Static Rate Limiter",
+    "type": "Heuristic Rules",
+    "precision": 0.9771036727103672,
+    "recall": 0.9712338262476895,
+    "f1": 0.9741599073001159,
+    "fpr": 0.2598944591029024,
+    "roc_auc": 0.9849296200966644,
+    "latency_ms": 1.4903337643459037e-05
+  },
+  {
+    "model": "Isolation Forest",
+    "type": "Tree-based ML",
+    "precision": 0.9960611677479148,
+    "recall": 0.9932994454713494,
+    "f1": 0.9946783896344285,
+    "fpr": 0.044854881266490766,
+    "roc_auc": 0.998385368149474,
+    "latency_ms": 0.003048183555438377
+  },
+  {
+    "model": "One-Class SVM",
+    "type": "Kernel ML",
+    "precision": 0.9957235321312992,
+    "recall": 0.9952634011090573,
+    "f1": 0.9954934134504275,
+    "fpr": 0.048812664907651716,
+    "roc_auc": 0.9985089726832456,
+    "latency_ms": 0.009633248349576903
+  },
+  {
+    "model": "Dense Autoencoder (Ours)",
+    "type": "Deep Learning",
+    "precision": 1.0,
+    "recall": 0.9653419593345656,
+    "f1": 0.9823653891370797,
+    "fpr": 0.0,
+    "roc_auc": 0.9993758809299694,
+    "latency_ms": 0.0004627363492552898
+  }
+]

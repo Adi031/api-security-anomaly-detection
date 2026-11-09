@@ -143,10 +143,10 @@ python ml-pipeline/training/train_lstm_ae.py
 
 ### Threshold Calibration Rules:
 * **Dense Autoencoder:** The threshold is calibrated strictly from legitimate validation errors:
-  $$\tau_{\text{dense}} = 3.5 \times P_{99}(\text{val\_errors}) \approx 0.455855$$
+  $$\tau_{\text{dense}} = 3.5 \times P_{99}(\text{val\_errors}) \approx 0.419546$$
   *(Includes session headroom multiplier to absorb multi-window variance; zero attack label leakage).*
 * **LSTM Autoencoder:** Calibrated at plain 99th percentile:
-  $$\tau_{\text{lstm}} = P_{99}(\text{val\_errors}) \approx 0.316657$$
+  $$\tau_{\text{lstm}} = P_{99}(\text{val\_errors}) \approx 0.194286$$
 
 ---
 

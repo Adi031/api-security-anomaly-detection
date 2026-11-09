@@ -82,15 +82,15 @@ class Database:
             records = await cursor.fetchall()
         return [dict(r) for r in records]
 
-    async def fetch_active_sessions(self):
+    async def fetch_active_sessions(self, minutes: int = 5):
         query = """
             SELECT session_id, count(*) as request_count 
             FROM request_logs 
+            WHERE timestamp >= datetime('now', ? || ' minute')
             GROUP BY session_id 
-            ORDER BY max(timestamp) DESC 
-            LIMIT 50
+            ORDER BY max(timestamp) DESC
         """
-        async with self.conn.execute(query) as cursor:
+        async with self.conn.execute(query, (f"-{minutes}",)) as cursor:
             records = await cursor.fetchall()
         return [dict(r) for r in records]
 

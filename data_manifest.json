@@ -1,12 +1,12 @@
 {
-  "total_gaps_analyzed": 2899,
-  "median_gap": 3.403,
-  "mean_gap": 4.1607,
-  "p1_gap": 0.703,
-  "p5_gap": 1.009,
-  "p25_gap": 1.9412,
-  "p75_gap": 5.6641,
-  "p95_gap": 9.9552,
-  "fast_attack_median_gap": 0.1774,
+  "total_gaps_analyzed": 12881,
+  "median_gap": 3.1893,
+  "mean_gap": 3.8942,
+  "p1_gap": 0.7588,
+  "p5_gap": 1.0771,
+  "p25_gap": 1.967,
+  "p75_gap": 5.1917,
+  "p95_gap": 8.9987,
+  "fast_attack_median_gap": 0.1727,
   "fast_attack_sanity_check": "PASSED (< 0.5s)"
 }

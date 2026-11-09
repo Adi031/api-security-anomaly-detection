@@ -108,7 +108,7 @@ def build_sequences(df, seq_len=30, group_by='session_id'):
         vocab: endpoint vocabulary
     """
     df = df.copy()
-    df['timestamp'] = pd.to_datetime(df['timestamp'])
+    df['timestamp'] = pd.to_datetime(df['timestamp'], format='mixed', utc=True)
     
     # Build endpoint vocabulary on normal data only
     if 'traffic_type' in df.columns:
