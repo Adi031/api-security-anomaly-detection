@@ -99,6 +99,18 @@ def init_db(db_path=None):
         FOREIGN KEY (request_log_id) REFERENCES request_logs(id)
     )
     """)
+
+    # Blocked entities table — active mitigation layer (FR-5)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS blocked_entities (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        entity_type VARCHAR(20) NOT NULL,
+        entity_id VARCHAR(100) NOT NULL,
+        until_ts REAL NOT NULL,
+        reason VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
     
     # Create indexes
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_request_logs_timestamp ON request_logs(timestamp)")
@@ -107,6 +119,7 @@ def init_db(db_path=None):
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_alerts_timestamp ON alerts(timestamp)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_scored_requests_log_id ON scored_requests(request_log_id)")
     cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_scored_log ON scored_requests(request_log_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_blocked_entities_lookup ON blocked_entities(entity_id, until_ts)")
     
     conn.commit()
     conn.close()

@@ -103,4 +103,23 @@ class Database:
             pass
         await self.conn.commit()
 
+    async def block_entity(self, entity_type: str, entity_id: str, duration_seconds: int = 600, reason: str = "Automated bot anomaly threshold exceeded"):
+        import time
+        until_ts = time.time() + duration_seconds
+        query = """
+            INSERT OR REPLACE INTO blocked_entities (entity_type, entity_id, until_ts, reason)
+            VALUES (?, ?, ?, ?)
+        """
+        async with self.conn.execute(query, (entity_type, entity_id, until_ts, reason)):
+            pass
+        await self.conn.commit()
+
+    async def fetch_blocked_entities(self):
+        import time
+        now = time.time()
+        query = "SELECT * FROM blocked_entities WHERE until_ts > ? ORDER BY id DESC"
+        async with self.conn.execute(query, (now,)) as cursor:
+            records = await cursor.fetchall()
+        return [dict(r) for r in records]
+
 db = Database()

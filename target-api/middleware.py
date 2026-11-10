@@ -12,6 +12,37 @@ def init_middleware(app):
         g.is_authenticated = False
         g.session_id = request.cookies.get('session_id') or request.headers.get('X-Session-ID') or str(uuid.uuid4())
 
+        # FR-5: Active Mitigation Check - reject blacklisted sessions/IPs with HTTP 403 Forbidden
+        ip_address = request.headers.get('X-Forwarded-For', request.remote_addr)
+        conn = get_db_connection()
+        if conn:
+            try:
+                cur = conn.cursor()
+                now_ts = time.time()
+                cur.execute(
+                    """
+                    SELECT reason FROM blocked_entities 
+                    WHERE (
+                        (entity_type = 'session' AND entity_id = ?) 
+                        OR (entity_type = 'ip' AND entity_id = ?)
+                    ) AND until_ts > ? 
+                    LIMIT 1
+                    """,
+                    (g.session_id, ip_address, now_ts)
+                )
+                blocked = cur.fetchone()
+                if blocked:
+                    from flask import jsonify
+                    return jsonify({
+                        "error": "Forbidden",
+                        "message": "Access blocked by API Shield active mitigation",
+                        "reason": blocked[0]
+                    }), 403
+            except Exception:
+                pass
+            finally:
+                release_db_connection(conn)
+
     @app.after_request
     def after_request(response):
         if not hasattr(g, 'start_time'):

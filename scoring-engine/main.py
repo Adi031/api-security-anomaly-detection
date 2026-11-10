@@ -136,6 +136,18 @@ async def poll_database():
                         # Persistence rule: only trigger alerts on 3rd consecutive anomaly
                         if session_flags[sid] >= 3 and raw_overall_severity != "normal":
                             stats["alerts_by_severity"][raw_overall_severity] += 1
+                            # Active Mitigation (FR-5): Block session in SQLite on 3rd anomaly strike
+                            try:
+                                ip_addr = session_logs[-1].get('ip_address') if session_logs else None
+                                block_reason = f"Active block: 3 consecutive anomalous windows ({raw_overall_severity}, score: {overall_score:.4f})"
+                                await db.block_entity("session", sid, duration_seconds=600, reason=block_reason)
+                                await broadcast_message({
+                                    "type": "entity_blocked",
+                                    "data": {"session_id": sid, "ip_address": ip_addr, "reason": block_reason, "score": overall_score}
+                                })
+                            except Exception as block_err:
+                                print(f"Error persisting block: {block_err}")
+
                             # Only alert if not in cooldown (60 seconds between alerts per session)
                             if sid not in alert_cooldowns or time.time() - alert_cooldowns[sid] > 60:
                                 alert = await alert_manager.create_alert_if_needed(sid, session_logs, overall_score, raw_overall_severity, overall_contributions)
@@ -209,6 +221,10 @@ async def get_alerts(page: int = 1, per_page: int = 20, severity: str = None):
     offset = (page - 1) * per_page
     alerts = await db.fetch_alerts(limit=per_page, offset=offset, severity=severity)
     return alerts
+
+@app.get("/api/blocked")
+async def get_blocked():
+    return await db.fetch_blocked_entities()
 
 @app.get("/api/sessions")
 async def get_sessions():
