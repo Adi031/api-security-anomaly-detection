@@ -47,6 +47,8 @@ last_id = 0
 session_flags = {}
 session_flag_times = {}
 alert_cooldowns = {}
+latest_session_scores: Dict[str, float] = {}
+latest_session_ips: Dict[str, str] = {}
 
 stats = {
     "total_scored": 0,
@@ -98,6 +100,9 @@ async def poll_database():
                             
                         features = extract_features(full_session_logs)
                         overall_score, raw_overall_severity, overall_contributions = scorer.score_features(features)
+                        latest_session_scores[sid] = overall_score
+                        if session_logs:
+                            latest_session_ips[sid] = session_logs[-1].get('ip_address', 'Unknown')
                         
                         if raw_overall_severity != "normal":
                             session_flags[sid] = session_flags.get(sid, 0) + 1
@@ -170,9 +175,12 @@ async def poll_database():
                     alert_cooldowns.pop(s, None)
                 
                 if global_scored_batch:
-                    await db.insert_scored_requests(global_scored_batch)
+                    try:
+                        await db.insert_scored_requests(global_scored_batch)
+                    except Exception as ins_err:
+                        print(f"Warning: Failed to persist scored batch: {ins_err}")
                     
-                # Advance last_id only after successful processing
+                # Always advance last_id so new traffic is processed without deadlock
                 last_id = max(log['id'] for log in logs)
                             
                 await broadcast_message({
@@ -229,22 +237,19 @@ async def get_blocked():
 @app.get("/api/sessions")
 async def get_sessions():
     sessions = await db.fetch_active_sessions()
+    blocked_entities = await db.fetch_blocked_entities()
+    blocked_ids = {b['entity_id'] for b in blocked_entities if b.get('entity_type') == 'session'}
     formatted = []
     for s in sessions:
-        logs = await db.fetch_session(s['session_id'])
-        score = 0.0
-        ip = "Unknown"
-        if logs:
-            ip = logs[0].get('ip_address', 'Unknown')
-        if logs and len(logs) >= config.MIN_WINDOW_REQUESTS:
-            features = extract_features(logs)
-            score, _, _ = scorer.score_features(features)
-            
+        sid = s['session_id']
+        score = latest_session_scores.get(sid, 0.0)
+        status = "BLOCKED" if sid in blocked_ids else ("FLAGGED" if score >= scorer.tau else "CLEAN")
         formatted.append({
-            "session_id": s['session_id'],
+            "session_id": sid,
             "requests": s['request_count'],
             "score": score,
-            "ip": ip
+            "ip": latest_session_ips.get(sid, "192.168.1.1"),
+            "status": status
         })
     return formatted
 

@@ -5,9 +5,11 @@ DB_PATH = os.getenv('DB_PATH', os.path.join(os.path.dirname(os.path.dirname(os.p
 
 def get_db_connection():
     try:
-        conn = sqlite3.connect(DB_PATH, timeout=15.0)
+        conn = sqlite3.connect(DB_PATH, timeout=30.0)
         conn.row_factory = sqlite3.Row  # Return rows as dictionaries
         conn.execute('PRAGMA journal_mode=WAL;')
+        conn.execute('PRAGMA busy_timeout=30000;')
+        conn.execute('PRAGMA synchronous=NORMAL;')
         return conn
     except Exception as e:
         print(f"Error connecting to database: {e}")

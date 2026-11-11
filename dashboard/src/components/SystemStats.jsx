@@ -1,21 +1,25 @@
 import React, { useEffect, useState, useRef } from 'react';
 
 const AnimatedCounter = ({ value }) => {
-  const [displayValue, setDisplayValue] = useState(value);
-  const prevValue = useRef(value);
+  const num = typeof value === 'number' && !isNaN(value) ? value : 0;
+  const [displayValue, setDisplayValue] = useState(num);
+  const prevValue = useRef(num);
 
   useEffect(() => {
-    if (value !== prevValue.current) {
-      setDisplayValue(value);
-      prevValue.current = value;
+    if (num !== prevValue.current) {
+      setDisplayValue(num);
+      prevValue.current = num;
     }
-  }, [value]);
+  }, [num]);
 
   return <span style={{ animation: 'count-up 0.3s ease-out' }} key={displayValue}>{displayValue.toLocaleString()}</span>;
 };
 
 export const SystemStats = ({ stats }) => {
-  const { totalRequests = 0, activeSessions = 0, warnings = 0, criticalAlerts = 0 } = stats || {};
+  const totalRequests = Number.isFinite(stats?.totalRequests) ? stats.totalRequests : (Number.isFinite(stats?.total_scored) ? stats.total_scored : 0);
+  const activeSessions = Number.isFinite(stats?.activeSessions) ? stats.activeSessions : 0;
+  const warnings = Number.isFinite(stats?.warnings) ? stats.warnings : (stats?.alerts_by_severity?.warning || 0);
+  const criticalAlerts = Number.isFinite(stats?.criticalAlerts) ? stats.criticalAlerts : (stats?.alerts_by_severity?.critical || 0);
   
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>

@@ -1,0 +1,143 @@
+<USER_REQUEST>
+apart from text changes there were also some technical things which sir said to add please read all these messages clearly and check if we have done everything he demanded or not Literature review:
+ 1. It has only 9 references, and none are recent work on API or web bot detection. 
+2. Phrases like “research demonstrates,” “studies note” and “security researchers have shown” have no citations; add citations. 
+3. Aim for about 15–25 references at least, including work from 2020 onward.
+Formatting Corrections
+Add proper table borders on pages 3, 4, 10, 11, 13, 18 and 19.
+
+On page 20, remove the unwanted/incomplete text: "high pen controls—such ands controls—such" and correct the surrounding sentence to ensure proper readability.
+
+Ensure consistent formatting, alignment, spacing, and font throughout the report.
+*Acknowledgement (Grammar Correction)*
+On the Acknowledgement page, the sentence:
+"throughout to see that this project rights its target"
+is grammatically incorrect.
+Replace it with:
+
+"I would like to express my sincere gratitude to my project guide for their continuous guidance, valuable suggestions, and encouragement throughout the project, which helped me successfully achieve its objectives."
+Consistency in Technical Terminology
+
+Maintain consistent capitalization throughout the report. In particular, check the following terms wherever they appear:
+
+API Shield
+Autoencoder
+Deep Learning
+Web Application Firewall (WAF)
+
+Please ensure that these terms are written consistently in the abstract, introduction, literature review, methodology, results and conclusion.
+Add Implementation Screenshots
+
+The report currently explains the architecture and implementation, but actual implementation screenshots are missing.
+
+Add relevant screenshots of:
+API Shield system running successfully.
+React-based security dashboard.
+Live API request monitoring.
+Anomaly detection and risk scores.
+Warning and critical alerts.
+Blocked sessions after attack detection.
+
+Place each screenshot in the relevant implementation subsection and provide a proper figure number and caption.
+Improve the Results and Evaluation Chapter
+
+Include actual screenshots and experimental evidence demonstrating:
+Dashboard statistics during normal traffic.
+Detection of credential-stuffing attacks.
+Detection of automated scraping.
+Anomaly scores crossing the detection threshold.
+Successful blocking of malicious sessions.
+Comparative results of the Autoencoder, Isolation Forest and One-Class SVM.
+
+Also include the confusion matrix (TP, TN, FP and FN) to support the reported performance metrics.
+*Improve References and In-text Citations*
+
+Do not simply list references at the end of the report. Cite the relevant research papers within the literature review wherever their work is discussed.
+
+For example:
+
+"Sakurada and Yairi [2] demonstrated the application of autoencoders for anomaly detection using nonlinear dimensionality reduction. Similarly, Mirsky et al. [3] proposed Kitsune, an ensemble of autoencoders for online network intrusion detection. Building upon these concepts, the proposed API Shield employs a Dense Autoencoder to identify anomalous API usage patterns using session-level behavioural features."
+
+Follow the same approach for the other research papers. Ensure that every in-text citation corresponds to an entry in the reference list.
+Acknowledgements: “rights its target” should be “reaches its target.”
+Title casing is inconsistent: “Api Shield” vs. “API Shield.”
+TP/(TP+FN)) has an extra closing parenthesis. "τ = 3.5×P99" contains a hidden zero-width character.
+Chapter 1 subsections are not numbered, although the table of contents numbers them 1.1 and 1.2. Contents page numbers should be rechecked.
+The ASCII architecture diagram in 6.1 is misaligned. A proper figure would be better.
+The certificate date is blank.
+Conclusion (Ch. 10, last line)
+
+Original: “…API Shield provides a practical, robust, and scientifically verified foundation for modern API behavioral security.”
+
+Rewrite: “…API Shield demonstrates a practical prototype for behavioral API security, with promising results on a controlled synthetic testbed that motivate further evaluation on real-world traffic.”
+2.4 opening
+
+Original: “…deep learning Autoencoders have emerged as a premier methodology for semi-supervised anomaly detection.”
+
+Rewrite: “…autoencoders have been widely applied to anomaly detection when only normal data is available for training [2], [3].”
+2.2, static rate limiting
+
+Original: “Security researchers have shown that static limiters exhibit two fatal flaws:”
+
+Rewrite: “Static limiters have two well-known limitations:” (Add a citation if you have one. Otherwise drop “researchers have shown.”)
+Abstract	“an objective mathematical threshold” change to  “a threshold calibrated on validation data”
+Abstract, Ch. 10 
+Original:	“significantly outperforming… Isolation Forest, and One-Class SVM”	
+Rewrite:“achieving the lowest false positive rate among the evaluated methods, while Isolation Forest and One-Class SVM achieved slightly higher recall”
+Abstract	“fundamentally insufficient against modern automated threats” to “often insufficient against modern automated threats”
+iske baad jo bhi likh raha hun  pehla original dusra rewrite one
+2.2	“Research demonstrates that signature matching is largely blind to modern bots”	“Signature matching is poorly suited to detecting bots that send valid payloads”
+2.3	“studies note that Isolation Forests…”	cite a source, or write “Isolation Forests split on one feature at a time, which can limit…”
+2.5	“Existing literature reveals a critical gap”	“This suggests a gap”
+2.5	“strictly suppressing false alarms”	“keeping false alarms low”
+3.2	“guarantees zero latency overhead”	“adds minimal overhead (<2 ms measured)”
+3.2, 8.3	“mathematically calibrated threshold”	“validation-calibrated threshold”
+8.3	“comfortably satisfying the project requirement”	“meeting the project requirement”
+8.3	“produced zero false alarms on the held-out test data”	“produced no false positives on the held-out synthetic test set”
+9 intro	“This chapter honestly evaluates…”	“This chapter discusses…”
+Ch. 10	“effectively separates malicious automated patterns from legitimate user bursts”	“separated simulated attack traffic from legitimate traffic in our experiments”
+Missing figures: the only figure is the architecture diagram. The report needs:
+training and validation loss curves
+a histogram of reconstruction errors for normal vs. attack windows, with τ marked
+ROC curves for all four models
+a confusion matrix
+per-attack recall as a table
+dashboard screenshots
+*Baseline comparison claims*
+The abstract and conclusion say the autoencoder "significantly outperforms" Isolation Forest and One-Class SVM. Your own Table 8.2 shows both baselines have higher Recall (99.33% and 99.53% vs 96.53%) and higher F1 (99.47% and 99.55% vs 98.24%). The autoencoder wins only on FPR and Precision. Correct these claims everywhere.
+Fair threshold comparison
+The baselines appear to use default thresholds while the autoencoder uses a tuned one. Calibrate every model with the same rule on the validation set, or compare recall at a fixed FPR. Then re-report Table 8.2.
+Justify the 3.5 multiplier
+τ = 3.5 × P99 is not "objective". 3.5 is a chosen value. Add a sensitivity table showing Recall and FPR for k = 1.5, 2, 2.5, 3 and 3.5, computed on validation data only. Also state clearly which split the "max normal loss = 0.1895" comes from. If anything was tuned on the test set, that is data leakage.
+Dataset inconsistencies
+- Table 5.1 says training uses normal + power users, but Section 6.1 says normal only. Fix one.
+- Validation has no power users, so the threshold was never calibrated on them.
+- The test set is described as "normal + attacks", yet you blame power users for the rate limiter's 25.99% FPR. Clarify what the test set contains.
+- Add a table of the test set with the number of benign windows and attack windows, broken down by attack type.
+False negative explanation (Section 8.4)
+Cold-start windows (<5 requests) were excluded when you built the dataset, so they cannot be false negatives in the test set. Session rotation was not one of your 4 simulated attacks either. Only the "dilution" case explains the measured 3.47%. Move the other two to Limitations.
+Windowing and 3-strike timing
+You poll every 1–2 s over 60 s windows. If "3 consecutive windows" means three 60 s windows, alerts would take at least 3 minutes, not 1–10 s. If the windows overlap, consecutive windows are nearly identical. Explain exactly how this works. Also:
+- Your metrics are defined per session but computed per window. State this clearly.
+- Section 6.3 has an instant block at score ≥ 2τ that is missing from FR-4, Stage 5 and Section 7.2. Make these consistent.
+Latency claims
+- Section 2.3 says OC-SVM has high inference latency, but your own table shows ~0.010 ms. Remove or correct this. Its quadratic cost is in training, not inference.
+- The abstract says "sub-15 ms" while the results say "<0.01 ms". Explain how latency was measured (single sample or batch average, hardware, number of runs).
+- Replace "guarantees zero latency overhead" with the measured "<2 ms".
+- Clarify whether logging is an async queue (Section 4.1) or a direct SQLite insert (Section 7.1).
+IP blocking
+FR-5 blocks IPs, but your literature review argues IP-based controls unfairly hit NAT/shared users. Justify this or block by session only.
+Threats to validity
+All traffic is synthetic and the bots have "zero jitter", which makes them easy to separate. Add a "Threats to Validity" section. If possible, add bots with randomised human-like delays. Also correct the claim that public datasets only contain packets: CSIC 2010 and CIC-IDS2017 include HTTP/web attack data.
+Add figures: training/validation loss curve, histogram of reconstruction error (normal vs attack) with τ marked, ROC curves for all 4 models, confusion matrix, per-attack recall table, and dashboard screenshots.
+Reproducibility: report batch size, epochs, random seed, and confirm model.eval() is used at inference (because of dropout). Add a GitHub link or code appendix. If possible, report mean ± std over 3–5 runs.
+Test case table (8.1): "PASSED" for the baselines only means they ran. Give each test case a measurable pass criterion (e.g. "FPR ≤ 5%").
+Explain how ROC-AUC was computed for the static rate limiter, since a binary rule has no ROC curve.
+Use one term consistently: "semi-supervised" or "one-class". The keywords say "Unsupervised".
+Please make all the above corrections carefully. Do not just make superficial formatting changes. Pay particular attention to the literature review, implementation screenshots and experimental results.
+
+After completing the corrections, share the revised report with me for final review before submission.
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-11-11T03:13:12+05:30.
+</ADDITIONAL_METADATA>

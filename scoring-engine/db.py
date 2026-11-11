@@ -1,6 +1,8 @@
 import aiosqlite
+import asyncio
 import json
 import os
+import sqlite3
 
 DB_PATH = os.getenv('DB_PATH', os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'database.sqlite'))
 
@@ -9,9 +11,11 @@ class Database:
         self.conn = None
 
     async def connect(self):
-        self.conn = await aiosqlite.connect(DB_PATH, timeout=15.0)
+        self.conn = await aiosqlite.connect(DB_PATH, timeout=30.0)
         self.conn.row_factory = aiosqlite.Row
         await self.conn.execute('PRAGMA journal_mode=WAL;')
+        await self.conn.execute('PRAGMA busy_timeout=30000;')
+        await self.conn.execute('PRAGMA synchronous=NORMAL;')
 
     async def disconnect(self):
         if self.conn:
@@ -95,13 +99,24 @@ class Database:
         return [dict(r) for r in records]
 
     async def insert_scored_requests(self, batch: list):
+        if not batch:
+            return
         query = """
             INSERT OR IGNORE INTO scored_requests (request_log_id, anomaly_score, severity)
             VALUES (?, ?, ?)
         """
-        async with self.conn.executemany(query, batch) as cursor:
-            pass
-        await self.conn.commit()
+        for attempt in range(5):
+            try:
+                async with self.conn.executemany(query, batch) as cursor:
+                    pass
+                await self.conn.commit()
+                return
+            except sqlite3.OperationalError as e:
+                if "locked" in str(e).lower() and attempt < 4:
+                    await asyncio.sleep(0.1 * (attempt + 1))
+                    continue
+                print(f"Warning: Failed to insert scored requests after retries: {e}")
+                break
 
     async def block_entity(self, entity_type: str, entity_id: str, duration_seconds: int = 600, reason: str = "Automated bot anomaly threshold exceeded"):
         import time
@@ -110,9 +125,18 @@ class Database:
             INSERT OR REPLACE INTO blocked_entities (entity_type, entity_id, until_ts, reason)
             VALUES (?, ?, ?, ?)
         """
-        async with self.conn.execute(query, (entity_type, entity_id, until_ts, reason)):
-            pass
-        await self.conn.commit()
+        for attempt in range(5):
+            try:
+                async with self.conn.execute(query, (entity_type, entity_id, until_ts, reason)):
+                    pass
+                await self.conn.commit()
+                return
+            except sqlite3.OperationalError as e:
+                if "locked" in str(e).lower() and attempt < 4:
+                    await asyncio.sleep(0.1 * (attempt + 1))
+                    continue
+                print(f"Warning: Failed to block entity after retries: {e}")
+                break
 
     async def fetch_blocked_entities(self):
         import time
